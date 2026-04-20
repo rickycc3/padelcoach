@@ -62,6 +62,32 @@ export async function getMatchActions(sessionId) {
   return (data ?? []).map(mapActionFromRow)
 }
 
+export async function deleteLastMatchAction(sessionId) {
+  if (!supabaseReady || !supabase) {
+    const sorted = sortActionsByTime(readLocalActions(sessionId))
+    if (!sorted.length) return []
+    sorted.pop()
+    writeLocalActions(sessionId, sorted)
+    return sorted
+  }
+
+  const { data: rows, error: selectError } = await supabase
+    .from('match_actions')
+    .select('id')
+    .eq('session_id', sessionId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+
+  if (selectError) throw selectError
+  const last = rows?.[0]
+  if (!last) return []
+
+  const { error: deleteError } = await supabase.from('match_actions').delete().eq('id', last.id)
+  if (deleteError) throw deleteError
+
+  return getMatchActions(sessionId)
+}
+
 export async function saveMatchAction(sessionId, actionPayload) {
   const payload = {
     ...actionPayload,

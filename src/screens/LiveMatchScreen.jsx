@@ -6,8 +6,9 @@ import {
   displayPointScore,
   getCurrentGame,
   progressScore,
+  replayMatchState,
 } from '../lib/matchScoring'
-import { saveMatchAction } from '../services/matchActions'
+import { deleteLastMatchAction, getMatchActions, saveMatchAction } from '../services/matchActions'
 import { finalizeSession, getSessionById } from '../services/sessions'
 
 const ACTION_RESULTS = [
@@ -35,6 +36,7 @@ export default function LiveMatchScreen() {
   const [matchState, setMatchState] = useState(createInitialMatchState)
   const [lastAction, setLastAction] = useState(null)
   const [savingAction, setSavingAction] = useState(false)
+  const [actionCount, setActionCount] = useState(0)
 
   useEffect(() => {
     if (session) return
@@ -72,6 +74,30 @@ export default function LiveMatchScreen() {
     return () => window.clearInterval(timer)
   }, [isPaused, timerStarted])
 
+  useEffect(() => {
+    if (!session?.id) return undefined
+
+    let mounted = true
+    async function syncFromStoredActions() {
+      try {
+        const actions = await getMatchActions(session.id)
+        if (!mounted) return
+        setActionCount(actions.length)
+        setMatchState(replayMatchState(session, actions))
+        setLastAction(actions.length ? actions[actions.length - 1] : null)
+      } catch {
+        if (mounted) {
+          setError('No se pudieron cargar las acciones del partido.')
+        }
+      }
+    }
+
+    syncFromStoredActions()
+    return () => {
+      mounted = false
+    }
+  }, [session])
+
   async function registerAction({ shot, result, origin, pointWinner }) {
     if (!session) return
     setSavingAction(true)
@@ -99,8 +125,25 @@ export default function LiveMatchScreen() {
       const nextMatchState = progressScore(matchState, pointWinner, session)
       setMatchState(nextMatchState)
       setLastAction(action)
+      setActionCount((c) => c + 1)
     } catch {
       setError('No se pudo registrar la acción.')
+    } finally {
+      setSavingAction(false)
+    }
+  }
+
+  async function handleUndoLastAction() {
+    if (!session || savingAction || actionCount === 0) return
+    setSavingAction(true)
+    setError('')
+    try {
+      const actions = await deleteLastMatchAction(session.id)
+      setActionCount(actions.length)
+      setMatchState(replayMatchState(session, actions))
+      setLastAction(actions.length ? actions[actions.length - 1] : null)
+    } catch {
+      setError('No se pudo deshacer la última acción.')
     } finally {
       setSavingAction(false)
     }
@@ -256,6 +299,20 @@ export default function LiveMatchScreen() {
             {lastAction.game} ({lastAction.score})
           </p>
         </section>
+      )}
+
+      {actionCount > 0 && (
+        <button
+          type="button"
+          disabled={savingAction}
+          onClick={handleUndoLastAction}
+          className="mt-3 flex w-full min-h-[56px] items-center justify-center gap-2 rounded-2xl border-2 border-slate-400 bg-white px-4 py-4 text-base font-semibold text-slate-900 shadow-[0_4px_14px_rgba(15,23,42,0.08)] transition active:scale-[0.99] active:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          <span className="text-xl leading-none" aria-hidden>
+            ↩
+          </span>
+          Deshacer último golpe
+        </button>
       )}
 
       {error && (
