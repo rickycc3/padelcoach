@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { supabaseReady } from '../lib/supabase'
 import { createSession, getRecentSessions } from '../services/sessions'
-import { firebaseReady } from '../firebase'
 
 const DURATION_OPTIONS = [60, 90, 120]
 const MATCH_FORMATS = ['Al mejor de 3', 'Tie-break']
@@ -112,9 +112,9 @@ export default function MatchSetupScreen() {
         <p className="mt-2 text-sm font-normal text-slate-500">
           Prepara la sesión y empieza el análisis en tiempo real.
         </p>
-        {!firebaseReady && (
+        {!supabaseReady && (
           <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-normal text-amber-800">
-            Firebase no está configurado. Se guardará en almacenamiento local.
+            Supabase no está configurado. Los datos se guardarán solo en este dispositivo.
           </p>
         )}
       </header>

@@ -1,221 +1,25 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import {
+  SHOTS,
+  createInitialMatchState,
+  displayPointScore,
+  getCurrentGame,
+  progressScore,
+} from '../lib/matchScoring'
 import { saveMatchAction } from '../services/matchActions'
 import { finalizeSession, getSessionById } from '../services/sessions'
 
 const ACTION_RESULTS = [
   { key: 'winner', label: 'Winner' },
-  { key: 'errorNoForzado', label: 'Error libre' },
+  { key: 'errorNoForzado', label: 'Error no forzado' },
   { key: 'errorForzado', label: 'Error forzado' },
-]
-const SHOTS = [
-  'Derecha',
-  'Revés',
-  'Bandeja',
-  'Víbora',
-  'Smash',
-  'Volea',
-  'Globo',
-  'Saque',
 ]
 
 function formatTime(totalSeconds) {
   const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0')
   const seconds = String(totalSeconds % 60).padStart(2, '0')
   return `${minutes}:${seconds}`
-}
-
-function createInitialMatchState() {
-  return {
-    currentSet: 1,
-    setsPlayer: 0,
-    setsRival: 0,
-    gamesPlayer: 0,
-    gamesRival: 0,
-    playerPoints: 0,
-    rivalPoints: 0,
-    advantage: null,
-    inTieBreak: false,
-    tieBreakPlayer: 0,
-    tieBreakRival: 0,
-    finished: false,
-  }
-}
-
-function displayPointScore(state, deuceType, format) {
-  if (format === 'Tie-break') {
-    return `${state.tieBreakPlayer}/${state.tieBreakRival}`
-  }
-
-  if (state.inTieBreak) {
-    return `${state.tieBreakPlayer}/${state.tieBreakRival}`
-  }
-
-  if (deuceType === 'Ventaja' && state.advantage) {
-    return state.advantage === 'player' ? 'Ad/40' : '40/Ad'
-  }
-
-  const pointLabels = ['0', '15', '30', '40']
-  const playerLabel = pointLabels[Math.min(state.playerPoints, 3)] ?? '40'
-  const rivalLabel = pointLabels[Math.min(state.rivalPoints, 3)] ?? '40'
-  return `${playerLabel}/${rivalLabel}`
-}
-
-function getCurrentGame(state, format) {
-  if (format === 'Tie-break') return 1
-  if (state.inTieBreak) return 7
-  return state.gamesPlayer + state.gamesRival + 1
-}
-
-function winSet(state, winner, format) {
-  const nextState = { ...state }
-  if (winner === 'player') {
-    nextState.setsPlayer += 1
-  } else {
-    nextState.setsRival += 1
-  }
-
-  const targetSets = format === 'Al mejor de 3' ? 2 : 1
-  if (nextState.setsPlayer === targetSets || nextState.setsRival === targetSets) {
-    nextState.finished = true
-    return nextState
-  }
-
-  return {
-    ...nextState,
-    currentSet: nextState.currentSet + 1,
-    gamesPlayer: 0,
-    gamesRival: 0,
-    playerPoints: 0,
-    rivalPoints: 0,
-    advantage: null,
-    inTieBreak: false,
-    tieBreakPlayer: 0,
-    tieBreakRival: 0,
-  }
-}
-
-function winGame(state, winner, format) {
-  const next = {
-    ...state,
-    playerPoints: 0,
-    rivalPoints: 0,
-    advantage: null,
-  }
-
-  if (winner === 'player') {
-    next.gamesPlayer += 1
-  } else {
-    next.gamesRival += 1
-  }
-
-  if (next.gamesPlayer === 6 && next.gamesRival === 6) {
-    return {
-      ...next,
-      inTieBreak: true,
-      tieBreakPlayer: 0,
-      tieBreakRival: 0,
-    }
-  }
-
-  if (next.gamesPlayer >= 6 || next.gamesRival >= 6) {
-    const diff = Math.abs(next.gamesPlayer - next.gamesRival)
-    if (diff >= 2 || next.gamesPlayer === 7 || next.gamesRival === 7) {
-      const setWinner = next.gamesPlayer > next.gamesRival ? 'player' : 'rival'
-      return winSet(next, setWinner, format)
-    }
-  }
-
-  return next
-}
-
-function progressScore(state, pointWinner, config) {
-  if (state.finished) return state
-
-  const format = config.format
-  const deuceType = config.deuceType
-
-  if (format === 'Tie-break') {
-    const next = { ...state }
-    if (pointWinner === 'player') {
-      next.tieBreakPlayer += 1
-    } else {
-      next.tieBreakRival += 1
-    }
-    const diff = Math.abs(next.tieBreakPlayer - next.tieBreakRival)
-    if ((next.tieBreakPlayer >= 7 || next.tieBreakRival >= 7) && diff >= 2) {
-      const winner = next.tieBreakPlayer > next.tieBreakRival ? 'player' : 'rival'
-      return winSet(next, winner, format)
-    }
-    return next
-  }
-
-  if (state.inTieBreak) {
-    const next = { ...state }
-    if (pointWinner === 'player') {
-      next.tieBreakPlayer += 1
-    } else {
-      next.tieBreakRival += 1
-    }
-
-    const diff = Math.abs(next.tieBreakPlayer - next.tieBreakRival)
-    if ((next.tieBreakPlayer >= 7 || next.tieBreakRival >= 7) && diff >= 2) {
-      const winner = next.tieBreakPlayer > next.tieBreakRival ? 'player' : 'rival'
-      const setResult = {
-        ...next,
-        inTieBreak: false,
-        gamesPlayer: winner === 'player' ? 7 : 6,
-        gamesRival: winner === 'rival' ? 7 : 6,
-      }
-      return winSet(setResult, winner, format)
-    }
-    return next
-  }
-
-  const next = { ...state }
-  if (pointWinner === 'player') {
-    next.playerPoints += 1
-  } else {
-    next.rivalPoints += 1
-  }
-
-  if (deuceType === 'Punto de oro') {
-    if (state.playerPoints >= 3 && state.rivalPoints >= 3) {
-      return winGame(state, pointWinner, format)
-    }
-    if (next.playerPoints >= 4 || next.rivalPoints >= 4) {
-      const winner = next.playerPoints > next.rivalPoints ? 'player' : 'rival'
-      return winGame(next, winner, format)
-    }
-    return next
-  }
-
-  if (state.playerPoints >= 3 && state.rivalPoints >= 3) {
-    if (!state.advantage) {
-      next.advantage = pointWinner
-      next.playerPoints = 3
-      next.rivalPoints = 3
-      return next
-    }
-
-    if (state.advantage === pointWinner) {
-      return winGame(state, pointWinner, format)
-    }
-
-    return {
-      ...next,
-      playerPoints: 3,
-      rivalPoints: 3,
-      advantage: null,
-    }
-  }
-
-  if (next.playerPoints >= 4 || next.rivalPoints >= 4) {
-    const winner = next.playerPoints > next.rivalPoints ? 'player' : 'rival'
-    return winGame(next, winner, format)
-  }
-
-  return next
 }
 
 export default function LiveMatchScreen() {
@@ -307,7 +111,14 @@ export default function LiveMatchScreen() {
     try {
       await finalizeSession(session.id)
     } finally {
-      navigate('/', { replace: true })
+      navigate(`/resumen/${session.id}`, {
+        replace: true,
+        state: {
+          session,
+          matchState,
+          elapsedSeconds,
+        },
+      })
     }
   }
 
@@ -336,10 +147,12 @@ export default function LiveMatchScreen() {
       <header className="mb-3 rounded-2xl border-[0.5px] border-slate-200 bg-white p-3">
         <p className="text-xs font-normal tracking-wide text-[#185FA5]">Partido en vivo</p>
         <h1 className="mt-0.5 text-lg font-medium text-slate-900">{session.studentName}</h1>
-        <p className="mt-1 text-xs font-normal text-slate-600">
-          Set {matchState.currentSet} · Juego {getCurrentGame(matchState, session.format)} ·{' '}
-          {displayPointScore(matchState, session.deuceType, session.format)}
-        </p>
+        <div className="mt-2 flex justify-center">
+          <p className="rounded-lg border-[0.5px] border-slate-200 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-700">
+            Set {matchState.currentSet} · Juego {getCurrentGame(matchState, session.format)} ·{' '}
+            {displayPointScore(matchState, session.deuceType, session.format)}
+          </p>
+        </div>
         <div className="mt-2 flex items-center justify-between gap-2">
           <p className="text-2xl font-medium tabular-nums text-slate-900">{formatTime(elapsedSeconds)}</p>
           <button
