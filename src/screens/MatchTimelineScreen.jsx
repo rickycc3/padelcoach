@@ -1,20 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useI18n } from '../i18n/useI18n.js'
 import { SHOTS } from '../lib/matchScoring'
 import { getMatchActions } from '../services/matchActions'
 import { getSessionById } from '../services/sessions'
-
-const RESULT_LABELS = {
-  winner: 'Winner',
-  errorNoForzado: 'Errores libres',
-  errorForzado: 'Errores forzados',
-}
-
-const Y_AXIS_LABELS = {
-  winner: 'Winner',
-  errorNoForzado: 'Error libre',
-  errorForzado: 'Error forzado',
-}
 
 const RESULT_ORDER = ['winner', 'errorNoForzado', 'errorForzado']
 
@@ -57,7 +46,11 @@ function computeSetChangeMinutes(sortedActions) {
   return lines
 }
 
-function computeInsights(shotMap, sortedActions, axisMaxMinutes) {
+function shotT(t, shot) {
+  return t(`shots.${shot}`)
+}
+
+function computeInsights(shotMap, sortedActions, axisMaxMinutes, t) {
   const positive = { text: '', detail: '' }
   const improvement = { text: '', detail: '' }
 
@@ -76,11 +69,15 @@ function computeInsights(shotMap, sortedActions, axisMaxMinutes) {
     }
   }
   if (bestShot) {
-    positive.text = `Golpe más efectivo: ${bestShot}`
-    positive.detail = `${shotMap[bestShot].winner} winners sobre ${bestTotal} acciones (${Math.round(bestRate * 100)}% acierto).`
+    positive.text = t('timeline.insightBestTitle', { shot: shotT(t, bestShot) })
+    positive.detail = t('timeline.insightBestDetail', {
+      w: shotMap[bestShot].winner,
+      total: bestTotal,
+      pct: Math.round(bestRate * 100),
+    })
   } else {
-    positive.text = 'Golpe más efectivo'
-    positive.detail = 'Registra más acciones con golpe para obtener este insight.'
+    positive.text = t('timeline.insightBestEmptyTitle')
+    positive.detail = t('timeline.insightBestEmptyDetail')
   }
 
   let worstShot = null
@@ -110,18 +107,20 @@ function computeInsights(shotMap, sortedActions, axisMaxMinutes) {
   }
 
   if (maxLibres > 0 && worstShot) {
-    improvement.text = `Afinar ${worstShot}`
-    improvement.detail = `${maxLibres} error${maxLibres === 1 ? '' : 'es'} libre${maxLibres === 1 ? '' : 's'} en este golpe.`
+    improvement.text = t('timeline.insightTweakTitle', { shot: shotT(t, worstShot) })
+    improvement.detail =
+      maxLibres === 1
+        ? t('timeline.insightTweakDetail', { n: maxLibres })
+        : t('timeline.insightTweakDetailPlural', { n: maxLibres })
     if (windowMax >= 2 && windowLabel) {
-      improvement.detail += ` ${windowMax} errores libres concentrados en ${windowLabel}.`
+      improvement.detail += t('timeline.insightTweakWindow', { w: windowMax, window: windowLabel })
     }
   } else if (windowMax >= 3 && windowLabel) {
-    improvement.text = 'Patrón temporal'
-    improvement.detail = `Varios errores libres entre ${windowLabel}; conviene revisar ritmo y decisiones en esa fase.`
+    improvement.text = t('timeline.insightPatternTitle')
+    improvement.detail = t('timeline.insightPatternDetail', { window: windowLabel })
   } else {
-    improvement.text = 'Seguir trabajando consistencia'
-    improvement.detail =
-      'Pocos errores libres registrados; mantén el foco en decisiones bajo presión en los próximos partidos.'
+    improvement.text = t('timeline.insightConsistencyTitle')
+    improvement.detail = t('timeline.insightConsistencyDetail')
   }
 
   return { positive, improvement }
@@ -134,6 +133,8 @@ function ScatterChart({
   setLines,
   selected,
   onSelect,
+  chartAria,
+  yAxisLabels,
 }) {
   const svgRef = useRef(null)
   const [dims, setDims] = useState({ w: 320, h: 200 })
@@ -203,7 +204,7 @@ function ScatterChart({
         height={dims.h}
         className="max-w-full touch-manipulation"
         role="img"
-        aria-label="Puntos del partido por tiempo y resultado"
+        aria-label={chartAria}
       >
         <rect x={0} y={0} width={dims.w} height={dims.h} fill="#F4F7FB" rx={8} />
 
@@ -230,7 +231,7 @@ function ScatterChart({
               className="fill-slate-500"
               style={{ fontSize: 9 }}
             >
-              {Y_AXIS_LABELS[res]}
+              {yAxisLabels[res]}
             </text>
           )
         })}
@@ -261,10 +262,10 @@ function ScatterChart({
         />
         <line x1={padL} y1={padT} x2={padL} y2={padT + plotH} stroke="#cbd5e1" strokeWidth={1} />
 
-        {ticks.map((t) => {
-          const x = padL + (t / xMax) * plotW
+        {ticks.map((tick) => {
+          const x = padL + (tick / xMax) * plotW
           return (
-            <g key={t}>
+            <g key={tick}>
               <line x1={x} y1={padT + plotH} x2={x} y2={padT + plotH + 4} stroke="#94a3b8" strokeWidth={0.75} />
               <text
                 x={x}
@@ -273,7 +274,7 @@ function ScatterChart({
                 className="fill-slate-500"
                 style={{ fontSize: 9 }}
               >
-                {Math.round(t)}′
+                {Math.round(tick)}′
               </text>
             </g>
           )
@@ -307,6 +308,7 @@ function ScatterChart({
 }
 
 export default function MatchTimelineScreen() {
+  const { t } = useI18n()
   const { sessionId } = useParams()
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
@@ -315,6 +317,15 @@ export default function MatchTimelineScreen() {
   const [error, setError] = useState('')
   const [shotFilter, setShotFilter] = useState('all')
   const [selected, setSelected] = useState(null)
+
+  const yAxisLabels = useMemo(
+    () => ({
+      winner: t('timeline.legendWinner'),
+      errorNoForzado: t('timeline.legendUnforced'),
+      errorForzado: t('timeline.legendForced'),
+    }),
+    [t],
+  )
 
   useEffect(() => {
     let mounted = true
@@ -325,14 +336,14 @@ export default function MatchTimelineScreen() {
         const s = await getSessionById(sessionId)
         if (!mounted) return
         if (!s) {
-          setError('Sesión no encontrada.')
+          setError(t('timeline.notFound'))
           return
         }
         setSession(s)
         const acts = await getMatchActions(sessionId)
         if (mounted) setActions(sortActions(acts))
       } catch {
-        if (mounted) setError('No se pudo cargar el timeline.')
+        if (mounted) setError(t('timeline.loadError'))
       } finally {
         if (mounted) setLoading(false)
       }
@@ -341,6 +352,7 @@ export default function MatchTimelineScreen() {
     return () => {
       mounted = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid refetch on locale change
   }, [sessionId])
 
   const shotMap = useMemo(() => buildShotTable(actions), [actions])
@@ -370,15 +382,15 @@ export default function MatchTimelineScreen() {
   const setLines = useMemo(() => computeSetChangeMinutes(actions), [actions])
 
   const insights = useMemo(
-    () => computeInsights(shotMap, actions, xMaxMinutes),
-    [shotMap, actions, xMaxMinutes],
+    () => computeInsights(shotMap, actions, xMaxMinutes, t),
+    [shotMap, actions, xMaxMinutes, t],
   )
 
   if (loading) {
     return (
       <main className="mx-auto min-h-screen w-full max-w-md bg-[#F4F7FB] px-4 py-6">
         <p className="rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm text-slate-500">
-          Cargando timeline...
+          {t('timeline.loading')}
         </p>
       </main>
     )
@@ -388,14 +400,14 @@ export default function MatchTimelineScreen() {
     return (
       <main className="mx-auto min-h-screen w-full max-w-md bg-[#F4F7FB] px-4 py-6">
         <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-700">
-          {error || 'Sesión no encontrada.'}
+          {error || t('timeline.notFound')}
         </p>
         <button
           type="button"
           onClick={() => navigate(`/resumen/${sessionId}`)}
           className="mt-4 w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-normal text-slate-800"
         >
-          Volver al resumen
+          {t('timeline.backSummary')}
         </button>
       </main>
     )
@@ -408,29 +420,29 @@ export default function MatchTimelineScreen() {
         onClick={() => navigate(`/resumen/${sessionId}`)}
         className="mb-4 flex items-center gap-1 text-xs font-medium text-[#0C447C]"
       >
-        <span aria-hidden>←</span> Volver
+        <span aria-hidden>←</span> {t('timeline.back')}
       </button>
 
       <header className="mb-6">
-        <p className="text-xs font-normal tracking-wide text-[#185FA5]">Timeline detallado</p>
+        <p className="text-xs font-normal tracking-wide text-[#185FA5]">{t('timeline.title')}</p>
         <h1 className="mt-0.5 text-xl font-semibold text-slate-900">{session.studentName}</h1>
         <p className="mt-1 text-xs font-normal text-slate-500">
-          {actions.length} acciones · duración sesión {session.estimatedDuration ?? 90} min
+          {t('timeline.actionsMeta', { count: actions.length, min: session.estimatedDuration ?? 90 })}
         </p>
       </header>
 
       <section className="rounded-2xl border-[0.5px] border-slate-200 bg-white p-4 shadow-[0_6px_18px_rgba(15,23,42,0.03)]">
         <h2 className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
-          Análisis por golpe
+          {t('timeline.analysisTitle')}
         </h2>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full min-w-[280px] border-collapse text-left text-xs">
             <thead>
               <tr className="border-b border-slate-200">
-                <th className="pb-2 pr-2 font-medium text-slate-600">Golpe</th>
-                <th className="pb-2 px-1 text-right font-medium text-slate-600">Winners</th>
-                <th className="pb-2 px-1 text-right font-medium text-slate-600">Errores libres</th>
-                <th className="pb-2 pl-1 text-right font-medium text-slate-600">Errores forzados</th>
+                <th className="pb-2 pr-2 font-medium text-slate-600">{t('timeline.colShot')}</th>
+                <th className="pb-2 px-1 text-right font-medium text-slate-600">{t('timeline.colWinners')}</th>
+                <th className="pb-2 px-1 text-right font-medium text-slate-600">{t('timeline.colUnforced')}</th>
+                <th className="pb-2 pl-1 text-right font-medium text-slate-600">{t('timeline.colForced')}</th>
               </tr>
             </thead>
             <tbody>
@@ -438,7 +450,7 @@ export default function MatchTimelineScreen() {
                 const r = shotMap[shot]
                 return (
                   <tr key={shot} className="border-b border-slate-100 last:border-b-0">
-                    <td className="py-2 pr-2 font-medium text-slate-800">{shot}</td>
+                    <td className="py-2 pr-2 font-medium text-slate-800">{shotT(t, shot)}</td>
                     <td className="py-2 px-1 text-right tabular-nums font-medium text-emerald-600">
                       {r.winner}
                     </td>
@@ -452,7 +464,7 @@ export default function MatchTimelineScreen() {
                 )
               })}
               <tr className="border-t border-slate-300">
-                <td className="pt-2.5 pr-2 font-semibold text-slate-900">Total</td>
+                <td className="pt-2.5 pr-2 font-semibold text-slate-900">{t('timeline.total')}</td>
                 <td className="pt-2.5 px-1 text-right tabular-nums font-semibold text-emerald-600">
                   {totals.w}
                 </td>
@@ -469,15 +481,13 @@ export default function MatchTimelineScreen() {
       </section>
 
       <section className="mt-5 rounded-2xl border-[0.5px] border-slate-200 bg-white p-4 shadow-[0_6px_18px_rgba(15,23,42,0.03)]">
-        <h2 className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
-          Puntos por tiempo
-        </h2>
+        <h2 className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">{t('timeline.chartTitle')}</h2>
         <p className="mt-1 text-[11px] font-normal text-slate-400">
-          Eje X: minutos (0–{xMaxMinutes}). Líneas discontinuas: cambio de set.
+          {t('timeline.chartHint', { max: xMaxMinutes })}
         </p>
 
         <label htmlFor="shot-filter" className="mt-3 block text-[11px] font-medium text-slate-600">
-          Filtrar por golpe
+          {t('timeline.filterLabel')}
         </label>
         <select
           id="shot-filter"
@@ -488,10 +498,10 @@ export default function MatchTimelineScreen() {
           }}
           className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-900 outline-none focus:border-[#185FA5] focus:ring-2 focus:ring-[#E6F1FB]"
         >
-          <option value="all">Todos los golpes</option>
+          <option value="all">{t('timeline.allShots')}</option>
           {SHOTS.map((s) => (
             <option key={s} value={s}>
-              {s}
+              {shotT(t, s)}
             </option>
           ))}
         </select>
@@ -504,49 +514,54 @@ export default function MatchTimelineScreen() {
             setLines={setLines}
             selected={selected}
             onSelect={setSelected}
+            chartAria={t('timeline.chartAria')}
+            yAxisLabels={yAxisLabels}
           />
         </div>
 
         <div className="mt-3 flex flex-wrap gap-3 text-[10px] font-normal text-slate-500">
           <span>
-            <span className="inline-block size-2.5 rounded-full bg-emerald-500 align-middle" /> Winner
+            <span className="inline-block size-2.5 rounded-full bg-emerald-500 align-middle" />{' '}
+            {t('timeline.legendWinner')}
           </span>
           <span>
-            <span className="inline-block size-2.5 rounded-full bg-rose-500 align-middle" /> Error libre
+            <span className="inline-block size-2.5 rounded-full bg-rose-500 align-middle" />{' '}
+            {t('timeline.legendUnforced')}
           </span>
           <span>
-            <span className="inline-block size-2.5 rounded-full bg-amber-500 align-middle" /> Error forzado
+            <span className="inline-block size-2.5 rounded-full bg-amber-500 align-middle" />{' '}
+            {t('timeline.legendForced')}
           </span>
         </div>
 
         {selected && (
           <div className="mt-4 rounded-xl border-[0.5px] border-[#185FA5] bg-[#E6F1FB] px-3 py-3 text-xs text-[#0C447C]">
             <p className="text-[10px] font-medium uppercase tracking-[0.1em] text-[#0C447C]/80">
-              Punto seleccionado
+              {t('timeline.selectedTitle')}
             </p>
             <dl className="mt-2 space-y-1">
               <div className="flex justify-between gap-2">
-                <dt className="text-slate-600">Golpe</dt>
-                <dd className="font-medium text-slate-900">{selected.shot}</dd>
+                <dt className="text-slate-600">{t('timeline.shot')}</dt>
+                <dd className="font-medium text-slate-900">{shotT(t, selected.shot)}</dd>
               </div>
               <div className="flex justify-between gap-2">
-                <dt className="text-slate-600">Resultado</dt>
+                <dt className="text-slate-600">{t('timeline.result')}</dt>
                 <dd className="font-medium text-slate-900">
-                  {Y_AXIS_LABELS[selected.result] ?? RESULT_LABELS[selected.result] ?? selected.result}
+                  {yAxisLabels[selected.result] ?? selected.result}
                 </dd>
               </div>
               <div className="flex justify-between gap-2">
-                <dt className="text-slate-600">Minuto</dt>
+                <dt className="text-slate-600">{t('timeline.minute')}</dt>
                 <dd className="tabular-nums font-medium text-slate-900">{selected.minute ?? '—'}</dd>
               </div>
               <div className="flex justify-between gap-2">
-                <dt className="text-slate-600">Set / Juego</dt>
+                <dt className="text-slate-600">{t('timeline.setGame')}</dt>
                 <dd className="tabular-nums font-medium text-slate-900">
-                  Set {selected.set ?? '—'} · Juego {selected.game ?? '—'}
+                  {t('live.set')} {selected.set ?? '—'} · {t('live.game')} {selected.game ?? '—'}
                 </dd>
               </div>
               <div className="flex justify-between gap-2">
-                <dt className="text-slate-600">Puntuación</dt>
+                <dt className="text-slate-600">{t('timeline.score')}</dt>
                 <dd className="font-medium text-slate-900">{selected.score ?? '—'}</dd>
               </div>
             </dl>
@@ -555,7 +570,7 @@ export default function MatchTimelineScreen() {
               onClick={() => setSelected(null)}
               className="mt-3 text-[11px] font-medium text-[#0C447C] underline"
             >
-              Cerrar detalle
+              {t('timeline.closeDetail')}
             </button>
           </div>
         )}
@@ -563,12 +578,16 @@ export default function MatchTimelineScreen() {
 
       <section className="mt-5 space-y-3">
         <article className="rounded-2xl border-[0.5px] border-emerald-200 bg-white p-4 shadow-[0_6px_18px_rgba(15,23,42,0.03)]">
-          <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-emerald-700">Insight positivo</p>
+          <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-emerald-700">
+            {t('timeline.insightPositive')}
+          </p>
           <p className="mt-1 text-sm font-semibold text-slate-900">{insights.positive.text}</p>
           <p className="mt-1 text-xs font-normal leading-relaxed text-slate-600">{insights.positive.detail}</p>
         </article>
         <article className="rounded-2xl border-[0.5px] border-amber-200 bg-white p-4 shadow-[0_6px_18px_rgba(15,23,42,0.03)]">
-          <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-amber-800">Mejora</p>
+          <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-amber-800">
+            {t('timeline.insightImprove')}
+          </p>
           <p className="mt-1 text-sm font-semibold text-slate-900">{insights.improvement.text}</p>
           <p className="mt-1 text-xs font-normal leading-relaxed text-slate-600">{insights.improvement.detail}</p>
         </article>

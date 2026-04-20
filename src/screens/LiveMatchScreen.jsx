@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { useI18n } from '../i18n/useI18n.js'
 import {
   SHOTS,
   createInitialMatchState,
@@ -11,11 +12,7 @@ import {
 import { deleteLastMatchAction, getMatchActions, saveMatchAction } from '../services/matchActions'
 import { finalizeSession, getSessionById } from '../services/sessions'
 
-const ACTION_RESULTS = [
-  { key: 'winner', label: 'Winner' },
-  { key: 'errorNoForzado', label: 'Error no forzado' },
-  { key: 'errorForzado', label: 'Error forzado' },
-]
+const ACTION_RESULT_KEYS = ['winner', 'errorNoForzado', 'errorForzado']
 
 function formatTime(totalSeconds) {
   const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0')
@@ -23,7 +20,12 @@ function formatTime(totalSeconds) {
   return `${minutes}:${seconds}`
 }
 
+function shotLabel(t, shot) {
+  return t(`shots.${shot}`)
+}
+
 export default function LiveMatchScreen() {
+  const { t } = useI18n()
   const { sessionId } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
@@ -50,7 +52,7 @@ export default function LiveMatchScreen() {
         }
       } catch {
         if (mounted) {
-          setError('No se pudo cargar la sesión de partido.')
+          setError(t('live.loadError'))
         }
       } finally {
         if (mounted) {
@@ -63,6 +65,7 @@ export default function LiveMatchScreen() {
     return () => {
       mounted = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid refetch on locale change
   }, [session, sessionId])
 
   useEffect(() => {
@@ -87,7 +90,7 @@ export default function LiveMatchScreen() {
         setLastAction(actions.length ? actions[actions.length - 1] : null)
       } catch {
         if (mounted) {
-          setError('No se pudieron cargar las acciones del partido.')
+          setError(t('live.actionsLoadError'))
         }
       }
     }
@@ -96,6 +99,7 @@ export default function LiveMatchScreen() {
     return () => {
       mounted = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid refetch on locale change
   }, [session])
 
   async function registerAction({ shot, result, origin, pointWinner }) {
@@ -127,7 +131,7 @@ export default function LiveMatchScreen() {
       setLastAction(action)
       setActionCount((c) => c + 1)
     } catch {
-      setError('No se pudo registrar la acción.')
+      setError(t('live.registerError'))
     } finally {
       setSavingAction(false)
     }
@@ -143,7 +147,7 @@ export default function LiveMatchScreen() {
       setMatchState(replayMatchState(session, actions))
       setLastAction(actions.length ? actions[actions.length - 1] : null)
     } catch {
-      setError('No se pudo deshacer la última acción.')
+      setError(t('live.undoError'))
     } finally {
       setSavingAction(false)
     }
@@ -165,11 +169,18 @@ export default function LiveMatchScreen() {
     }
   }
 
+  const lastActionLine = useMemo(() => {
+    if (!lastAction) return ''
+    const resKey = `live.results.${lastAction.result}`
+    const resLabel = t(resKey)
+    return `${shotLabel(t, lastAction.shot)} · ${resLabel} · ${t('live.minShort')} ${lastAction.minute} · ${t('live.setAbbr')} ${lastAction.set}, ${t('live.gameAbbr')} ${lastAction.game} (${lastAction.score})`
+  }, [lastAction, t])
+
   if (loadingSession) {
     return (
       <main className="mx-auto min-h-screen w-full max-w-md bg-[#F4F7FB] px-5 py-9">
         <p className="rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm text-slate-500">
-          Cargando partido...
+          {t('live.loading')}
         </p>
       </main>
     )
@@ -179,7 +190,7 @@ export default function LiveMatchScreen() {
     return (
       <main className="mx-auto min-h-screen w-full max-w-md bg-[#F4F7FB] px-5 py-9">
         <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-700">
-          Sesión no encontrada.
+          {t('live.notFound')}
         </p>
       </main>
     )
@@ -188,11 +199,11 @@ export default function LiveMatchScreen() {
   return (
     <main className="mx-auto min-h-screen w-full max-w-md bg-[#F4F7FB] px-4 py-5">
       <header className="mb-3 rounded-2xl border-[0.5px] border-slate-200 bg-white p-3">
-        <p className="text-xs font-normal tracking-wide text-[#185FA5]">Partido en vivo</p>
+        <p className="text-xs font-normal tracking-wide text-[#185FA5]">{t('live.title')}</p>
         <h1 className="mt-0.5 text-lg font-medium text-slate-900">{session.studentName}</h1>
         <div className="mt-2 flex justify-center">
           <p className="rounded-lg border-[0.5px] border-slate-200 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-700">
-            Set {matchState.currentSet} · Juego {getCurrentGame(matchState, session.format)} ·{' '}
+            {t('live.set')} {matchState.currentSet} · {t('live.game')} {getCurrentGame(matchState, session.format)} ·{' '}
             {displayPointScore(matchState, session.deuceType, session.format)}
           </p>
         </div>
@@ -207,7 +218,7 @@ export default function LiveMatchScreen() {
             disabled={timerStarted}
             className="rounded-xl border-[0.5px] border-[#185FA5] bg-[#E6F1FB] px-2.5 py-1.5 text-xs font-normal text-[#0C447C] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Iniciar
+            {t('live.start')}
           </button>
           <button
             type="button"
@@ -215,14 +226,14 @@ export default function LiveMatchScreen() {
             disabled={!timerStarted}
             className="rounded-xl border-[0.5px] border-slate-200 bg-slate-100 px-2.5 py-1.5 text-xs font-normal text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isPaused ? 'Reanudar' : 'Pausar'}
+            {isPaused ? t('live.resume') : t('live.pause')}
           </button>
         </div>
       </header>
 
       <section className="mt-3 rounded-2xl border-[0.5px] border-slate-200 bg-white p-3">
         <h2 className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
-          Punto sin acción del alumno
+          {t('live.noActionTitle')}
         </h2>
         <div className="mt-2 grid grid-cols-2 gap-1.5">
           <button
@@ -238,7 +249,7 @@ export default function LiveMatchScreen() {
             }
             className="rounded-xl border-[0.5px] border-slate-200 bg-white px-2 py-2 text-xs font-normal text-slate-700"
           >
-            Punto ganado
+            {t('live.pointWon')}
           </button>
           <button
             type="button"
@@ -253,36 +264,34 @@ export default function LiveMatchScreen() {
             }
             className="rounded-xl border-[0.5px] border-slate-200 bg-white px-2 py-2 text-xs font-normal text-slate-700"
           >
-            Punto perdido
+            {t('live.pointLost')}
           </button>
         </div>
       </section>
 
       <section className="mt-3 rounded-2xl border-[0.5px] border-slate-200 bg-white p-3">
-        <h2 className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
-          Golpes del alumno
-        </h2>
+        <h2 className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">{t('live.shotsTitle')}</h2>
         <div className="mt-2 grid grid-cols-2 gap-2">
           {SHOTS.map((shot) => (
             <article key={shot} className="rounded-xl border-[0.5px] border-slate-200 bg-slate-50/70 p-2">
-              <p className="text-xs font-medium text-slate-800">{shot}</p>
+              <p className="text-xs font-medium text-slate-800">{shotLabel(t, shot)}</p>
               <div className="mt-1.5 grid grid-cols-3 gap-1">
-                {ACTION_RESULTS.map((result) => (
+                {ACTION_RESULT_KEYS.map((resultKey) => (
                   <button
-                    key={`${shot}-${result.key}`}
+                    key={`${shot}-${resultKey}`}
                     type="button"
                     disabled={savingAction}
                     onClick={() =>
                       registerAction({
                         shot,
-                        result: result.key,
+                        result: resultKey,
                         origin: 'golpe',
-                        pointWinner: result.key === 'errorNoForzado' ? 'rival' : 'player',
+                        pointWinner: resultKey === 'errorNoForzado' ? 'rival' : 'player',
                       })
                     }
                     className="rounded-lg border-[0.5px] border-slate-200 bg-white px-1 py-1.5 text-[10px] font-normal text-slate-700"
                   >
-                    {result.label}
+                    {t(`live.results.${resultKey}`)}
                   </button>
                 ))}
               </div>
@@ -293,11 +302,8 @@ export default function LiveMatchScreen() {
 
       {lastAction && (
         <section className="mt-3 rounded-xl border-[0.5px] border-[#185FA5] bg-[#E6F1FB] p-2.5">
-          <p className="text-[10px] font-medium uppercase tracking-[0.1em] text-[#0C447C]">Última acción</p>
-          <p className="mt-1 text-xs font-normal text-[#0C447C]">
-            {lastAction.shot} - {lastAction.result} - min {lastAction.minute} - set {lastAction.set}, juego{' '}
-            {lastAction.game} ({lastAction.score})
-          </p>
+          <p className="text-[10px] font-medium uppercase tracking-[0.1em] text-[#0C447C]">{t('live.lastAction')}</p>
+          <p className="mt-1 text-xs font-normal text-[#0C447C]">{lastActionLine}</p>
         </section>
       )}
 
@@ -311,7 +317,7 @@ export default function LiveMatchScreen() {
           <span className="text-xl leading-none" aria-hidden>
             ↩
           </span>
-          Deshacer último golpe
+          {t('live.undoLast')}
         </button>
       )}
 
@@ -326,7 +332,7 @@ export default function LiveMatchScreen() {
         onClick={handleFinishMatch}
         className="mt-4 w-full rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-normal text-white"
       >
-        Finalizar partido
+        {t('live.finish')}
       </button>
     </main>
   )

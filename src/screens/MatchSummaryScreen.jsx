@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { useI18n } from '../i18n/useI18n.js'
+import { deuceStoredToPath, formatStoredToPath } from '../i18n/display'
 import { SHOTS, createInitialMatchState, replayMatchState } from '../lib/matchScoring'
 import { getMatchActions } from '../services/matchActions'
 import {
@@ -17,23 +19,23 @@ const TIME_BUCKETS = [
   { label: '75-90+', min: 75, max: Infinity },
 ]
 
-function formatSessionDate(createdAt) {
-  if (!createdAt) return '—'
+function formatSessionDate(createdAt, locale) {
+  if (!createdAt) return null
   const date =
     typeof createdAt?.toDate === 'function' ? createdAt.toDate() : new Date(createdAt)
-  if (Number.isNaN(date.getTime())) return '—'
-  return date.toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })
+  if (Number.isNaN(date.getTime())) return null
+  return date.toLocaleString(locale === 'en' ? 'en-GB' : 'es-ES', { dateStyle: 'medium', timeStyle: 'short' })
 }
 
-function formatDuration(totalSeconds) {
+function formatDuration(totalSeconds, t) {
   const sec = Math.max(0, Math.floor(totalSeconds || 0))
-  if (sec < 60) return `${sec}s`
+  if (sec < 60) return `${sec}${t('summary.secSuffix')}`
   const m = Math.floor(sec / 60)
   const s = sec % 60
-  if (m < 60) return s > 0 ? `${m} min ${s}s` : `${m} min`
+  if (m < 60) return s > 0 ? `${m} ${t('setup.min')} ${s}${t('summary.secSuffix')}` : `${m} ${t('setup.min')}`
   const h = Math.floor(m / 60)
   const rm = m % 60
-  return rm > 0 ? `${h}h ${rm} min` : `${h}h`
+  return rm > 0 ? `${h}${t('summary.hourSuffix')} ${rm} ${t('setup.min')}` : `${h}${t('summary.hourSuffix')}`
 }
 
 function countGeneralStats(actions) {
@@ -90,9 +92,9 @@ function formatSetsBanner(matchState) {
   return parts.length ? parts.join(' · ') : '—'
 }
 
-function outcomeLabel(matchState) {
-  if (matchState.setsPlayer === matchState.setsRival) return 'Empate'
-  return matchState.setsPlayer > matchState.setsRival ? 'Victoria' : 'Derrota'
+function outcomeKey(matchState) {
+  if (matchState.setsPlayer === matchState.setsRival) return 'tie'
+  return matchState.setsPlayer > matchState.setsRival ? 'win' : 'loss'
 }
 
 function StatCard({ title, value, previousLabel }) {
@@ -105,11 +107,12 @@ function StatCard({ title, value, previousLabel }) {
   )
 }
 
-function ShotRow({ name, winner, errorNoForzado, errorForzado }) {
+function ShotRow({ shotKey, winner, errorNoForzado, errorForzado, t }) {
   const total = winner + errorNoForzado + errorForzado
   const wPct = total ? (winner / total) * 100 : 0
   const nfPct = total ? (errorNoForzado / total) * 100 : 0
   const fPct = total ? (errorForzado / total) * 100 : 0
+  const name = t(`shots.${shotKey}`)
 
   return (
     <div className="flex items-center gap-2 border-b border-slate-100 py-2.5 last:border-b-0">
@@ -117,13 +120,13 @@ function ShotRow({ name, winner, errorNoForzado, errorForzado }) {
       <div className="min-w-0 flex-1">
         <div className="flex h-2.5 overflow-hidden rounded-full bg-slate-100">
           {wPct > 0 && (
-            <div className="h-full bg-emerald-500" style={{ width: `${wPct}%` }} title="Winners" />
+            <div className="h-full bg-emerald-500" style={{ width: `${wPct}%` }} title={t('summary.winners')} />
           )}
           {nfPct > 0 && (
-            <div className="h-full bg-rose-500" style={{ width: `${nfPct}%` }} title="Errores no forzados" />
+            <div className="h-full bg-rose-500" style={{ width: `${nfPct}%` }} title={t('summary.unforced')} />
           )}
           {fPct > 0 && (
-            <div className="h-full bg-amber-500" style={{ width: `${fPct}%` }} title="Errores forzados" />
+            <div className="h-full bg-amber-500" style={{ width: `${fPct}%` }} title={t('summary.forced')} />
           )}
         </div>
       </div>
@@ -139,6 +142,7 @@ function ShotRow({ name, winner, errorNoForzado, errorForzado }) {
 }
 
 export default function MatchSummaryScreen() {
+  const { t, locale } = useI18n()
   const { sessionId } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
@@ -210,8 +214,7 @@ export default function MatchSummaryScreen() {
     return () => {
       mounted = false
     }
-    // Recarga al cambiar de entrada de navegación; `location.state` se lee dentro del efecto.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- sessionId + location.key definen la carga
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sessionId + location.key define reload
   }, [sessionId, location.key])
 
   const stats = useMemo(() => countGeneralStats(actions), [actions])
@@ -224,37 +227,55 @@ export default function MatchSummaryScreen() {
     return formatSetsBanner(matchState)
   }, [matchState])
 
-  const resultKind = matchState ? outcomeLabel(matchState) : ''
-  const isVictory = resultKind === 'Victoria'
-  const isDefeat = resultKind === 'Derrota'
+  const outcome = matchState ? outcomeKey(matchState) : null
+  const isVictory = outcome === 'win'
+  const isDefeat = outcome === 'loss'
+  const resultKind =
+    outcome === 'win' ? t('summary.outcomeWin') : outcome === 'loss' ? t('summary.outcomeLoss') : t('summary.outcomeTie')
 
   const prevLine = (key) =>
     prevStats && typeof prevStats[key] === 'number'
-      ? `Sesión anterior: ${prevStats[key]}`
-      : 'Sesión anterior: —'
+      ? t('summary.prevWith', { n: prevStats[key] })
+      : t('summary.prevNone')
+
+  const sessionDateDisplay =
+    session && session.createdAt
+      ? (formatSessionDate(session.createdAt, locale) ?? t('summary.noDate'))
+      : t('summary.noDate')
+
+  const formatDisplay = session
+    ? formatStoredToPath(session.format)
+      ? t(formatStoredToPath(session.format))
+      : session.format
+    : ''
+  const deuceDisplay = session
+    ? deuceStoredToPath(session.deuceType)
+      ? t(deuceStoredToPath(session.deuceType))
+      : session.deuceType
+    : ''
 
   async function handleSaveSession() {
     setSaving(true)
     setSaveStatus('')
     try {
       await saveSessionCoachNotes(sessionId, notes)
-      setSaveStatus('Cambios guardados.')
+      setSaveStatus(t('summary.saveOk'))
     } catch {
-      setSaveStatus('No se pudo guardar. Inténtalo de nuevo.')
+      setSaveStatus(t('summary.saveErr'))
     } finally {
       setSaving(false)
     }
   }
 
   function handleSendPdf() {
-    window.alert('El envío de PDF por email estará disponible próximamente.')
+    window.alert(t('summary.pdfSoon'))
   }
 
   if (loading) {
     return (
       <main className="mx-auto min-h-screen w-full max-w-md bg-[#F4F7FB] px-4 py-6">
         <p className="rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm text-slate-500">
-          Cargando resumen...
+          {t('summary.loading')}
         </p>
       </main>
     )
@@ -264,14 +285,14 @@ export default function MatchSummaryScreen() {
     return (
       <main className="mx-auto min-h-screen w-full max-w-md bg-[#F4F7FB] px-4 py-6">
         <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-700">
-          No encontramos esta sesión.
+          {t('summary.notFound')}
         </p>
         <button
           type="button"
           onClick={() => navigate('/', { replace: true })}
           className="mt-4 w-full rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-normal text-white"
         >
-          Volver al inicio
+          {t('summary.backHome')}
         </button>
       </main>
     )
@@ -280,24 +301,24 @@ export default function MatchSummaryScreen() {
   return (
     <main className="mx-auto min-h-screen w-full max-w-md bg-[#F4F7FB] px-4 py-5 pb-10">
       <header className="rounded-2xl border-[0.5px] border-slate-200 bg-white p-4 shadow-[0_6px_18px_rgba(15,23,42,0.03)]">
-        <p className="text-xs font-normal tracking-wide text-[#185FA5]">Resumen del partido</p>
+        <p className="text-xs font-normal tracking-wide text-[#185FA5]">{t('summary.title')}</p>
         <h1 className="mt-1 text-xl font-semibold text-slate-900">{session.studentName}</h1>
         <dl className="mt-3 space-y-1.5 text-xs font-normal text-slate-600">
           <div className="flex justify-between gap-2">
-            <dt className="text-slate-500">Fecha</dt>
-            <dd className="text-right text-slate-800">{formatSessionDate(session.createdAt)}</dd>
+            <dt className="text-slate-500">{t('summary.date')}</dt>
+            <dd className="text-right text-slate-800">{sessionDateDisplay}</dd>
           </div>
           <div className="flex justify-between gap-2">
-            <dt className="text-slate-500">Duración</dt>
-            <dd className="text-right text-slate-800">{formatDuration(elapsedSeconds)}</dd>
+            <dt className="text-slate-500">{t('summary.duration')}</dt>
+            <dd className="text-right text-slate-800">{formatDuration(elapsedSeconds, t)}</dd>
           </div>
           <div className="flex justify-between gap-2">
-            <dt className="text-slate-500">Formato</dt>
-            <dd className="text-right text-slate-800">{session.format}</dd>
+            <dt className="text-slate-500">{t('summary.format')}</dt>
+            <dd className="text-right text-slate-800">{formatDisplay}</dd>
           </div>
           <div className="flex justify-between gap-2">
-            <dt className="text-slate-500">Deuce</dt>
-            <dd className="text-right text-slate-800">{session.deuceType}</dd>
+            <dt className="text-slate-500">{t('summary.deuce')}</dt>
+            <dd className="text-right text-slate-800">{deuceDisplay}</dd>
           </div>
         </dl>
       </header>
@@ -316,7 +337,7 @@ export default function MatchSummaryScreen() {
             isVictory ? 'text-emerald-800' : isDefeat ? 'text-rose-800' : 'text-slate-500'
           }`}
         >
-          Resultado
+          {t('summary.resultLabel')}
         </p>
         <p
           className={`mt-1 text-2xl font-semibold ${
@@ -327,48 +348,40 @@ export default function MatchSummaryScreen() {
         </p>
         <p className="mt-2 font-mono text-sm font-medium tracking-tight text-slate-800">{setsLine}</p>
         <p className="mt-1 text-xs font-normal text-slate-500">
-          Sets alumno {matchState.setsPlayer} · Rival {matchState.setsRival}
+          {t('summary.setsStudent')} {matchState.setsPlayer} · {t('summary.rival')} {matchState.setsRival}
         </p>
       </section>
 
       <section className="mt-5">
-        <h2 className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
-          Estadísticas generales
-        </h2>
+        <h2 className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">{t('summary.statsTitle')}</h2>
         <div className="mt-2 grid grid-cols-2 gap-2">
-          <StatCard title="Winners" value={stats.winners} previousLabel={prevLine('winners')} />
+          <StatCard title={t('summary.winners')} value={stats.winners} previousLabel={prevLine('winners')} />
           <StatCard
-            title="Errores no forzados"
+            title={t('summary.unforced')}
             value={stats.errorNoForzado}
             previousLabel={prevLine('errorNoForzado')}
           />
           <StatCard
-            title="Errores forzados"
+            title={t('summary.forced')}
             value={stats.errorForzado}
             previousLabel={prevLine('errorForzado')}
           />
-          <StatCard title="Total acciones" value={stats.total} previousLabel={prevLine('total')} />
+          <StatCard title={t('summary.totalActions')} value={stats.total} previousLabel={prevLine('total')} />
         </div>
       </section>
 
       <section className="mt-5 rounded-2xl border-[0.5px] border-slate-200 bg-white p-3 shadow-[0_6px_18px_rgba(15,23,42,0.03)]">
-        <h2 className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
-          Rendimiento por golpe
-        </h2>
-        <p className="mt-1 text-[10px] font-normal text-slate-400">
-          Verde: winners · Rojo: errores no forzados · Naranja: errores forzados
-        </p>
+        <h2 className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">{t('summary.perfTitle')}</h2>
+        <p className="mt-1 text-[10px] font-normal text-slate-400">{t('summary.perfHint')}</p>
         <div className="mt-2">
           {SHOTS.map((shot) => (
-            <ShotRow key={shot} name={shot} {...shotMap[shot]} />
+            <ShotRow key={shot} shotKey={shot} {...shotMap[shot]} t={t} />
           ))}
         </div>
       </section>
 
       <section className="mt-5 rounded-2xl border-[0.5px] border-slate-200 bg-white p-3 shadow-[0_6px_18px_rgba(15,23,42,0.03)]">
-        <h2 className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
-          Errores no forzados por tramo (15 min)
-        </h2>
+        <h2 className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">{t('summary.chartTitle')}</h2>
         <div className="mt-4 flex h-36 items-end justify-between gap-1.5">
           {TIME_BUCKETS.map((b, i) => {
             const count = errorBuckets[i] ?? 0
@@ -391,20 +404,20 @@ export default function MatchSummaryScreen() {
           onClick={() => navigate(`/sesion/${sessionId}/timeline`)}
           className="mt-4 w-full rounded-xl border-[0.5px] border-[#185FA5] bg-[#E6F1FB] px-3 py-2.5 text-xs font-medium text-[#0C447C]"
         >
-          Ver timeline detallado
+          {t('summary.timelineBtn')}
         </button>
       </section>
 
       <section className="mt-5">
         <label htmlFor="coach-notes" className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
-          Notas del entrenador
+          {t('summary.notesTitle')}
         </label>
         <textarea
           id="coach-notes"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={5}
-          placeholder="Observaciones para el alumno..."
+          placeholder={t('summary.notesPlaceholder')}
           className="mt-2 w-full resize-y rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal text-slate-900 shadow-[0_6px_18px_rgba(15,23,42,0.03)] outline-none transition focus:border-[#185FA5] focus:ring-2 focus:ring-[#E6F1FB]"
         />
         {saveStatus && <p className="mt-1.5 text-xs text-slate-500">{saveStatus}</p>}
@@ -417,14 +430,14 @@ export default function MatchSummaryScreen() {
           onClick={handleSaveSession}
           className="w-full rounded-xl border-[0.5px] border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 shadow-[0_6px_18px_rgba(15,23,42,0.03)] transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {saving ? 'Guardando...' : 'Guardar sesión'}
+          {saving ? t('summary.saving') : t('summary.save')}
         </button>
         <button
           type="button"
           onClick={handleSendPdf}
           className="w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white shadow-[0_10px_20px_rgba(15,23,42,0.16)] transition hover:bg-slate-800"
         >
-          Enviar PDF por email
+          {t('summary.sendPdf')}
         </button>
       </div>
     </main>
