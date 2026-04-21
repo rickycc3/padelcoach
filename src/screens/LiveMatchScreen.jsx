@@ -24,6 +24,10 @@ function shotLabel(t, shot) {
   return t(`shots.${shot}`)
 }
 
+function formatPointsSpaced(state, deuceType, format) {
+  return displayPointScore(state, deuceType, format).split('/').join(' / ')
+}
+
 export default function LiveMatchScreen() {
   const { t } = useI18n()
   const { sessionId } = useParams()
@@ -250,10 +254,17 @@ export default function LiveMatchScreen() {
         <p className="text-xs font-normal tracking-wide text-[#185FA5]">{t('live.title')}</p>
         <h1 className="mt-0.5 text-lg font-medium text-slate-900">{session.studentName}</h1>
         <div className="mt-3 flex justify-center">
-          <p className="rounded-xl border-[0.5px] border-slate-200 bg-slate-50 px-4 py-2.5 text-base font-semibold tabular-nums leading-snug text-slate-800">
-            {t('live.set')} {matchState.currentSet} · {t('live.game')} {getCurrentGame(matchState, session.format)} ·{' '}
-            {displayPointScore(matchState, session.deuceType, session.format)}
-          </p>
+          <div className="flex min-w-[7.5rem] flex-col items-center rounded-xl border-[0.5px] border-slate-200 bg-slate-50 px-4 py-1.5 text-center">
+            <p className="text-[11px] font-semibold uppercase leading-none tracking-[0.06em] text-[#185FA5]">
+              {t('live.set')} {matchState.currentSet}
+            </p>
+            <p className="mt-1 text-xl font-bold leading-none tabular-nums tracking-tight text-slate-900">
+              {matchState.gamesPlayer} - {matchState.gamesRival}
+            </p>
+            <p className="mt-1 text-sm font-semibold leading-none tabular-nums text-slate-600">
+              {formatPointsSpaced(matchState, session.deuceType, session.format)}
+            </p>
+          </div>
         </div>
         <div className="mt-3 flex items-center justify-between gap-3">
           <p className="min-w-0 shrink text-3xl font-semibold tabular-nums tracking-tight text-slate-900">
