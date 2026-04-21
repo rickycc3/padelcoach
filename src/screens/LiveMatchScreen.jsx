@@ -250,23 +250,23 @@ export default function LiveMatchScreen() {
     <main
       className={`mx-auto min-h-screen w-full max-w-md bg-[#F4F7FB] px-4 py-5 ${pendingAction ? 'pb-36' : ''}`}
     >
-      <header className="mb-3 rounded-2xl border-[0.5px] border-slate-200 bg-white p-4">
-        <p className="text-xs font-normal tracking-wide text-[#185FA5]">{t('live.title')}</p>
-        <h1 className="mt-0.5 text-lg font-medium text-slate-900">{session.studentName}</h1>
-        <div className="mt-3 flex justify-center">
-          <div className="flex min-w-[7.5rem] flex-col items-center rounded-xl border-[0.5px] border-slate-200 bg-slate-50 px-4 py-1.5 text-center">
-            <p className="text-[11px] font-semibold uppercase leading-none tracking-[0.06em] text-[#185FA5]">
-              {t('live.set')} {matchState.currentSet}
-            </p>
-            <p className="mt-1 text-xl font-bold leading-none tabular-nums tracking-tight text-slate-900">
-              {matchState.gamesPlayer} - {matchState.gamesRival}
-            </p>
-            <p className="mt-1 text-sm font-semibold leading-none tabular-nums text-slate-600">
-              {formatPointsSpaced(matchState, session.deuceType, session.format)}
-            </p>
-          </div>
+      <header className="mb-3 overflow-hidden rounded-2xl border-[0.5px] border-slate-200 bg-white shadow-sm">
+        <div className="px-4 pb-1 pt-4">
+          <p className="text-xs font-normal tracking-wide text-[#185FA5]">{t('live.title')}</p>
+          <h1 className="mt-0.5 text-lg font-medium text-slate-900">{session.studentName}</h1>
         </div>
-        <div className="mt-3 flex items-center justify-between gap-3">
+        <div className="w-full border-y border-slate-200/90 bg-gradient-to-b from-slate-50 via-slate-50/95 to-[#DCEAF7] px-4 py-4 text-center">
+          <p className="text-base font-extrabold uppercase leading-tight tracking-[0.14em] text-[#0C447C]">
+            {t('live.set')} {matchState.currentSet}
+          </p>
+          <p className="mt-2.5 text-5xl font-extrabold leading-none tabular-nums tracking-tight text-slate-900">
+            {matchState.gamesPlayer} - {matchState.gamesRival}
+          </p>
+          <p className="mt-2.5 text-3xl font-bold leading-none tabular-nums text-slate-700">
+            {formatPointsSpaced(matchState, session.deuceType, session.format)}
+          </p>
+        </div>
+        <div className="flex items-center justify-between gap-3 px-4 pb-4 pt-3">
           <p className="min-w-0 shrink text-3xl font-semibold tabular-nums tracking-tight text-slate-900">
             {formatTime(elapsedSeconds)}
           </p>
