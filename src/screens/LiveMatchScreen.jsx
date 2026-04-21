@@ -39,6 +39,7 @@ export default function LiveMatchScreen() {
   const [lastAction, setLastAction] = useState(null)
   const [savingAction, setSavingAction] = useState(false)
   const [actionCount, setActionCount] = useState(0)
+  const [pendingAction, setPendingAction] = useState(null)
 
   useEffect(() => {
     if (session) return
@@ -102,8 +103,9 @@ export default function LiveMatchScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid refetch on locale change
   }, [session])
 
+  /** @returns {Promise<boolean>} */
   async function registerAction({ shot, result, origin, pointWinner }) {
-    if (!session) return
+    if (!session) return false
     setSavingAction(true)
     setError('')
 
@@ -130,8 +132,10 @@ export default function LiveMatchScreen() {
       setMatchState(nextMatchState)
       setLastAction(action)
       setActionCount((c) => c + 1)
+      return true
     } catch {
       setError(t('live.registerError'))
+      return false
     } finally {
       setSavingAction(false)
     }
@@ -176,6 +180,43 @@ export default function LiveMatchScreen() {
     return `${shotLabel(t, lastAction.shot)} · ${resLabel} · ${t('live.minShort')} ${lastAction.minute} · ${t('live.setAbbr')} ${lastAction.set}, ${t('live.gameAbbr')} ${lastAction.game} (${lastAction.score})`
   }, [lastAction, t])
 
+  const pendingConfirmDetail = useMemo(() => {
+    if (!pendingAction) return ''
+    if (pendingAction.origin === 'punto-directo') {
+      return pendingAction.pointWinner === 'player' ? t('live.pointWon') : t('live.pointLost')
+    }
+    const resKey = `live.results.${pendingAction.result}`
+    return `${shotLabel(t, pendingAction.shot)} — ${t(resKey)}`
+  }, [pendingAction, t])
+
+  const pendingConfirmLine = pendingAction ? t('live.confirmLine', { detail: pendingConfirmDetail }) : ''
+
+  function pendingMatches(partial) {
+    if (!pendingAction) return false
+    return (
+      pendingAction.shot === partial.shot &&
+      pendingAction.result === partial.result &&
+      pendingAction.origin === partial.origin &&
+      pendingAction.pointWinner === partial.pointWinner
+    )
+  }
+
+  async function handleConfirmPending() {
+    if (!pendingAction || savingAction) return
+    const ok = await registerAction(pendingAction)
+    if (ok) setPendingAction(null)
+  }
+
+  const shotResultBaseClass =
+    'rounded-lg border-[0.5px] px-1 py-1.5 text-[10px] font-normal transition disabled:cursor-not-allowed disabled:opacity-45'
+  const shotResultSelectedClass = 'border-[#185FA5] bg-[#E6F1FB] font-medium text-[#0C447C] ring-1 ring-[#185FA5]/40'
+  const shotResultIdleClass = 'border-slate-200 bg-white text-slate-700'
+
+  const directPointBaseClass =
+    'rounded-xl border-[0.5px] px-2 py-2 text-xs font-normal transition disabled:cursor-not-allowed disabled:opacity-45'
+  const directPointSelectedClass = 'border-[#185FA5] bg-[#E6F1FB] font-medium text-[#0C447C] ring-1 ring-[#185FA5]/40'
+  const directPointIdleClass = 'border-slate-200 bg-white text-slate-700'
+
   if (loadingSession) {
     return (
       <main className="mx-auto min-h-screen w-full max-w-md bg-[#F4F7FB] px-5 py-9">
@@ -197,7 +238,9 @@ export default function LiveMatchScreen() {
   }
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-md bg-[#F4F7FB] px-4 py-5">
+    <main
+      className={`mx-auto min-h-screen w-full max-w-md bg-[#F4F7FB] px-4 py-5 ${pendingAction ? 'pb-36' : ''}`}
+    >
       <header className="mb-3 rounded-2xl border-[0.5px] border-slate-200 bg-white p-3">
         <p className="text-xs font-normal tracking-wide text-[#185FA5]">{t('live.title')}</p>
         <h1 className="mt-0.5 text-lg font-medium text-slate-900">{session.studentName}</h1>
@@ -240,14 +283,23 @@ export default function LiveMatchScreen() {
             type="button"
             disabled={savingAction}
             onClick={() =>
-              registerAction({
+              setPendingAction({
                 shot: 'Sin golpe',
                 result: 'winner',
                 origin: 'punto-directo',
                 pointWinner: 'player',
               })
             }
-            className="rounded-xl border-[0.5px] border-slate-200 bg-white px-2 py-2 text-xs font-normal text-slate-700"
+            className={`${directPointBaseClass} ${
+              pendingMatches({
+                shot: 'Sin golpe',
+                result: 'winner',
+                origin: 'punto-directo',
+                pointWinner: 'player',
+              })
+                ? directPointSelectedClass
+                : directPointIdleClass
+            }`}
           >
             {t('live.pointWon')}
           </button>
@@ -255,14 +307,23 @@ export default function LiveMatchScreen() {
             type="button"
             disabled={savingAction}
             onClick={() =>
-              registerAction({
+              setPendingAction({
                 shot: 'Sin golpe',
                 result: 'errorNoForzado',
                 origin: 'punto-directo',
                 pointWinner: 'rival',
               })
             }
-            className="rounded-xl border-[0.5px] border-slate-200 bg-white px-2 py-2 text-xs font-normal text-slate-700"
+            className={`${directPointBaseClass} ${
+              pendingMatches({
+                shot: 'Sin golpe',
+                result: 'errorNoForzado',
+                origin: 'punto-directo',
+                pointWinner: 'rival',
+              })
+                ? directPointSelectedClass
+                : directPointIdleClass
+            }`}
           >
             {t('live.pointLost')}
           </button>
@@ -276,24 +337,25 @@ export default function LiveMatchScreen() {
             <article key={shot} className="rounded-xl border-[0.5px] border-slate-200 bg-slate-50/70 p-2">
               <p className="text-xs font-medium text-slate-800">{shotLabel(t, shot)}</p>
               <div className="mt-1.5 grid grid-cols-3 gap-1">
-                {ACTION_RESULT_KEYS.map((resultKey) => (
-                  <button
-                    key={`${shot}-${resultKey}`}
-                    type="button"
-                    disabled={savingAction}
-                    onClick={() =>
-                      registerAction({
-                        shot,
-                        result: resultKey,
-                        origin: 'golpe',
-                        pointWinner: resultKey === 'errorNoForzado' ? 'rival' : 'player',
-                      })
-                    }
-                    className="rounded-lg border-[0.5px] border-slate-200 bg-white px-1 py-1.5 text-[10px] font-normal text-slate-700"
-                  >
-                    {t(`live.results.${resultKey}`)}
-                  </button>
-                ))}
+                {ACTION_RESULT_KEYS.map((resultKey) => {
+                  const payload = {
+                    shot,
+                    result: resultKey,
+                    origin: 'golpe',
+                    pointWinner: resultKey === 'errorNoForzado' ? 'rival' : 'player',
+                  }
+                  return (
+                    <button
+                      key={`${shot}-${resultKey}`}
+                      type="button"
+                      disabled={savingAction}
+                      onClick={() => setPendingAction(payload)}
+                      className={`${shotResultBaseClass} ${pendingMatches(payload) ? shotResultSelectedClass : shotResultIdleClass}`}
+                    >
+                      {t(`live.results.${resultKey}`)}
+                    </button>
+                  )
+                })}
               </div>
             </article>
           ))}
@@ -334,6 +396,36 @@ export default function LiveMatchScreen() {
       >
         {t('live.finish')}
       </button>
+
+      {pendingAction && (
+        <div
+          className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur-sm"
+          role="region"
+          aria-label={pendingConfirmLine}
+        >
+          <div className="mx-auto w-full max-w-md">
+            <p className="text-center text-sm font-medium text-slate-900">{pendingConfirmLine}</p>
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                disabled={savingAction}
+                onClick={() => setPendingAction(null)}
+                className="min-h-[48px] flex-1 rounded-xl border-[0.5px] border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-800 transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {t('live.cancel')}
+              </button>
+              <button
+                type="button"
+                disabled={savingAction}
+                onClick={handleConfirmPending}
+                className="min-h-[48px] flex-[1.15] rounded-xl bg-[#185FA5] px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {t('live.confirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

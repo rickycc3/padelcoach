@@ -75,6 +75,9 @@ export const translations = {
       minShort: 'min',
       undoLast: 'Deshacer último golpe',
       finish: 'Finalizar partido',
+      confirm: 'Confirmar',
+      cancel: 'Cancelar',
+      confirmLine: 'Confirmar: {{detail}}',
       results: {
         winner: 'Winner',
         errorNoForzado: 'Error no forzado',
@@ -233,6 +236,9 @@ export const translations = {
       minShort: 'min',
       undoLast: 'Undo last shot',
       finish: 'End match',
+      confirm: 'Confirm',
+      cancel: 'Cancel',
+      confirmLine: 'Confirm: {{detail}}',
       results: {
         winner: 'Winner',
         errorNoForzado: 'Unforced error',
