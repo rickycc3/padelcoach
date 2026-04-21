@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useI18n } from '../i18n/useI18n.js'
 import {
@@ -44,6 +44,37 @@ export default function LiveMatchScreen() {
   const [savingAction, setSavingAction] = useState(false)
   const [actionCount, setActionCount] = useState(0)
   const [pendingAction, setPendingAction] = useState(null)
+
+  const liveEndRef = useRef({ session: null, matchState: null, elapsedSeconds: 0 })
+
+  useEffect(() => {
+    liveEndRef.current = { session, matchState, elapsedSeconds }
+  }, [session, matchState, elapsedSeconds])
+
+  useEffect(() => {
+    if (!session?.id || !matchState.finished) return undefined
+
+    const timerId = window.setTimeout(() => {
+      const snap = liveEndRef.current
+      if (!snap.session) return
+      void (async () => {
+        try {
+          await finalizeSession(snap.session.id)
+        } finally {
+          navigate(`/resumen/${snap.session.id}`, {
+            replace: true,
+            state: {
+              session: snap.session,
+              matchState: snap.matchState,
+              elapsedSeconds: snap.elapsedSeconds,
+            },
+          })
+        }
+      })()
+    }, 2000)
+
+    return () => window.clearTimeout(timerId)
+  }, [session?.id, matchState.finished, navigate])
 
   useEffect(() => {
     if (session) return
@@ -109,7 +140,7 @@ export default function LiveMatchScreen() {
 
   /** @returns {Promise<boolean>} */
   async function registerAction({ shot, result, origin, pointWinner }) {
-    if (!session) return false
+    if (!session || matchState.finished) return false
     setSavingAction(true)
     setError('')
 
@@ -136,6 +167,7 @@ export default function LiveMatchScreen() {
       setMatchState(nextMatchState)
       setLastAction(action)
       setActionCount((c) => c + 1)
+      if (nextMatchState.finished) setPendingAction(null)
       return true
     } catch {
       setError(t('live.registerError'))
@@ -146,7 +178,7 @@ export default function LiveMatchScreen() {
   }
 
   async function handleUndoLastAction() {
-    if (!session || savingAction || actionCount === 0) return
+    if (!session || savingAction || actionCount === 0 || matchState.finished) return
     setSavingAction(true)
     setError('')
     try {
@@ -162,7 +194,7 @@ export default function LiveMatchScreen() {
   }
 
   async function handleFinishMatch() {
-    if (!session) return
+    if (!session || matchState.finished) return
     try {
       await finalizeSession(session.id)
     } finally {
@@ -211,10 +243,13 @@ export default function LiveMatchScreen() {
   }
 
   async function handleConfirmPending() {
-    if (!pendingAction || savingAction) return
+    if (!pendingAction || savingAction || matchState.finished) return
     const ok = await registerAction(pendingAction)
     if (ok) setPendingAction(null)
   }
+
+  const matchOver = matchState.finished
+  const blockInputs = savingAction || matchOver
 
   const shotResultBaseClass =
     'rounded-lg border-[0.5px] px-1 py-1.5 text-[10px] font-normal transition disabled:cursor-not-allowed disabled:opacity-45'
@@ -276,7 +311,7 @@ export default function LiveMatchScreen() {
               setTimerStarted(true)
               setIsPaused(false)
             }}
-            disabled={timerStarted}
+            disabled={timerStarted || matchOver}
             className="shrink-0 rounded-xl border-[0.5px] border-[#185FA5] bg-[#E6F1FB] px-4 py-2.5 text-sm font-medium text-[#0C447C] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {t('live.start')}
@@ -284,13 +319,23 @@ export default function LiveMatchScreen() {
           <button
             type="button"
             onClick={() => setIsPaused((current) => !current)}
-            disabled={!timerStarted}
+            disabled={!timerStarted || matchOver}
             className="shrink-0 rounded-xl border-[0.5px] border-slate-200 bg-slate-100 px-4 py-2.5 text-sm font-medium text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isPaused ? t('live.resume') : t('live.pause')}
           </button>
         </div>
       </header>
+
+      {matchOver && (
+        <p
+          className="mt-3 rounded-xl border border-[#185FA5]/40 bg-[#E6F1FB] px-3 py-2.5 text-center text-sm font-medium text-[#0C447C]"
+          role="status"
+          aria-live="polite"
+        >
+          {t('live.matchEndRedirect')}
+        </p>
+      )}
 
       <section
         className="mt-3 rounded-2xl border-[0.5px] border-slate-200 bg-white px-2.5 py-2"
@@ -302,7 +347,7 @@ export default function LiveMatchScreen() {
             <div className="mt-1.5 flex flex-col gap-1">
               <button
                 type="button"
-                disabled={savingAction}
+                disabled={blockInputs}
                 onClick={() =>
                   setPendingAction({
                     shot: 'Sin golpe',
@@ -326,7 +371,7 @@ export default function LiveMatchScreen() {
               </button>
               <button
                 type="button"
-                disabled={savingAction}
+                disabled={blockInputs}
                 onClick={() =>
                   setPendingAction({
                     shot: 'Sin golpe',
@@ -355,7 +400,7 @@ export default function LiveMatchScreen() {
             <div className="mt-1.5 flex flex-col gap-1">
               <button
                 type="button"
-                disabled={savingAction}
+                disabled={blockInputs}
                 onClick={() =>
                   setPendingAction({
                     shot: 'Sin golpe',
@@ -379,7 +424,7 @@ export default function LiveMatchScreen() {
               </button>
               <button
                 type="button"
-                disabled={savingAction}
+                disabled={blockInputs}
                 onClick={() =>
                   setPendingAction({
                     shot: 'Sin golpe',
@@ -424,7 +469,7 @@ export default function LiveMatchScreen() {
                     <button
                       key={`${shot}-${resultKey}`}
                       type="button"
-                      disabled={savingAction}
+                      disabled={blockInputs}
                       onClick={() => setPendingAction(payload)}
                       className={`${shotResultBaseClass} ${pendingMatches(payload) ? shotResultSelectedClass : shotResultIdleClass}`}
                     >
@@ -448,7 +493,7 @@ export default function LiveMatchScreen() {
       {actionCount > 0 && (
         <button
           type="button"
-          disabled={savingAction}
+          disabled={blockInputs}
           onClick={handleUndoLastAction}
           className="mt-3 flex w-full min-h-[56px] items-center justify-center gap-2 rounded-2xl border-2 border-slate-400 bg-white px-4 py-4 text-base font-semibold text-slate-900 shadow-[0_4px_14px_rgba(15,23,42,0.08)] transition active:scale-[0.99] active:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-45"
         >
@@ -467,8 +512,9 @@ export default function LiveMatchScreen() {
 
       <button
         type="button"
+        disabled={matchOver}
         onClick={handleFinishMatch}
-        className="mt-4 w-full rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-normal text-white"
+        className="mt-4 w-full rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-normal text-white disabled:cursor-not-allowed disabled:opacity-45"
       >
         {t('live.finish')}
       </button>
@@ -484,7 +530,7 @@ export default function LiveMatchScreen() {
             <div className="mt-3 flex gap-2">
               <button
                 type="button"
-                disabled={savingAction}
+                disabled={blockInputs}
                 onClick={() => setPendingAction(null)}
                 className="min-h-[48px] flex-1 rounded-xl border-[0.5px] border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-800 transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
               >
@@ -492,7 +538,7 @@ export default function LiveMatchScreen() {
               </button>
               <button
                 type="button"
-                disabled={savingAction}
+                disabled={blockInputs}
                 onClick={handleConfirmPending}
                 className="min-h-[48px] flex-[1.15] rounded-xl bg-[#185FA5] px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
               >

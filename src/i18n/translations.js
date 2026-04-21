@@ -89,6 +89,7 @@ export const translations = {
       confirm: 'Confirmar',
       cancel: 'Cancelar',
       confirmLine: 'Confirmar: {{detail}}',
+      matchEndRedirect: 'Partido terminado. Abriendo resumen…',
       results: {
         winner: 'Winner',
         errorNoForzado: 'Error no forzado',
@@ -261,6 +262,7 @@ export const translations = {
       confirm: 'Confirm',
       cancel: 'Cancel',
       confirmLine: 'Confirm: {{detail}}',
+      matchEndRedirect: 'Match over. Opening summary…',
       results: {
         winner: 'Winner',
         errorNoForzado: 'Unforced error',
