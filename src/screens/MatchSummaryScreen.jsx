@@ -107,36 +107,79 @@ function StatCard({ title, value, previousLabel }) {
   )
 }
 
-function ShotRow({ shotKey, winner, errorNoForzado, errorForzado, t }) {
-  const total = winner + errorNoForzado + errorForzado
-  const wPct = total ? (winner / total) * 100 : 0
-  const nfPct = total ? (errorNoForzado / total) * 100 : 0
-  const fPct = total ? (errorForzado / total) * 100 : 0
-  const name = t(`shots.${shotKey}`)
+function ShotPerformanceGroupedChart({ shotMap, t }) {
+  const chartH = 160
+  const rows = SHOTS.map((shot) => {
+    const row = shotMap[shot]
+    return {
+      shot,
+      winner: row?.winner ?? 0,
+      errorNoForzado: row?.errorNoForzado ?? 0,
+      errorForzado: row?.errorForzado ?? 0,
+    }
+  })
+  const maxVal = Math.max(1, ...rows.flatMap((r) => [r.winner, r.errorNoForzado, r.errorForzado]))
+
+  const bars = [
+    { key: 'winner', valueKey: 'winner', className: 'bg-emerald-500' },
+    { key: 'nf', valueKey: 'errorNoForzado', className: 'bg-orange-500' },
+    { key: 'f', valueKey: 'errorForzado', className: 'bg-red-500' },
+  ]
 
   return (
-    <div className="flex items-center gap-2 border-b border-slate-100 py-2.5 last:border-b-0">
-      <p className="w-[4.5rem] shrink-0 text-xs font-medium text-slate-800">{name}</p>
-      <div className="min-w-0 flex-1">
-        <div className="flex h-2.5 overflow-hidden rounded-full bg-slate-100">
-          {wPct > 0 && (
-            <div className="h-full bg-emerald-500" style={{ width: `${wPct}%` }} title={t('summary.winners')} />
-          )}
-          {nfPct > 0 && (
-            <div className="h-full bg-rose-500" style={{ width: `${nfPct}%` }} title={t('summary.unforced')} />
-          )}
-          {fPct > 0 && (
-            <div className="h-full bg-amber-500" style={{ width: `${fPct}%` }} title={t('summary.forced')} />
-          )}
+    <div className="mt-3">
+      <p className="mb-2 text-center text-[10px] font-medium uppercase tracking-wide text-slate-400">
+        {t('summary.perfYAxis')}
+      </p>
+      <div className="overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch]">
+        <div className="flex min-w-[32rem] items-end justify-between gap-2 px-0.5 sm:min-w-full sm:gap-3">
+          {rows.map((r) => (
+            <div key={r.shot} className="flex min-w-[2.25rem] flex-1 flex-col items-stretch sm:min-w-0">
+              <div className="relative flex items-end justify-center gap-0.5" style={{ height: chartH }}>
+                {bars.map((b) => {
+                  const n = r[b.valueKey]
+                  const pct = maxVal ? (n / maxVal) * 100 : 0
+                  const hPx = n ? Math.max(6, Math.round((pct / 100) * chartH)) : 0
+                  return (
+                    <div
+                      key={b.key}
+                      className="flex min-w-0 flex-1 flex-col items-center justify-end"
+                      title={`${n}`}
+                    >
+                      {n > 0 ? (
+                        <span className="mb-0.5 text-[9px] font-semibold tabular-nums text-slate-700">{n}</span>
+                      ) : (
+                        <span className="mb-0.5 h-3 shrink-0" aria-hidden />
+                      )}
+                      <div
+                        className={`w-[min(100%,0.85rem)] max-w-full rounded-t-md ${b.className} sm:w-3`}
+                        style={{ height: hPx }}
+                      />
+                    </div>
+                  )
+                })}
+              </div>
+              <p className="mt-2 line-clamp-2 min-h-[2rem] text-center text-[9px] font-medium leading-tight text-slate-700 sm:text-[10px]">
+                {t(`shots.${r.shot}`)}
+              </p>
+            </div>
+          ))}
         </div>
       </div>
-      <p className="shrink-0 text-[10px] font-normal tabular-nums text-slate-500">
-        <span className="text-emerald-600">{winner}</span>
-        <span className="text-slate-300"> · </span>
-        <span className="text-rose-600">{errorNoForzado}</span>
-        <span className="text-slate-300"> · </span>
-        <span className="text-amber-600">{errorForzado}</span>
-      </p>
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-slate-100 pt-3 text-[10px] font-medium text-slate-600">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-emerald-500" aria-hidden />
+          {t('summary.winners')}
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-orange-500" aria-hidden />
+          {t('summary.unforced')}
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-red-500" aria-hidden />
+          {t('summary.forced')}
+        </span>
+      </div>
     </div>
   )
 }
@@ -372,12 +415,7 @@ export default function MatchSummaryScreen() {
 
       <section className="mt-5 rounded-2xl border-[0.5px] border-slate-200 bg-white p-3 shadow-[0_6px_18px_rgba(15,23,42,0.03)]">
         <h2 className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">{t('summary.perfTitle')}</h2>
-        <p className="mt-1 text-[10px] font-normal text-slate-400">{t('summary.perfHint')}</p>
-        <div className="mt-2">
-          {SHOTS.map((shot) => (
-            <ShotRow key={shot} shotKey={shot} {...shotMap[shot]} t={t} />
-          ))}
-        </div>
+        <ShotPerformanceGroupedChart shotMap={shotMap} t={t} />
       </section>
 
       <section className="mt-5 rounded-2xl border-[0.5px] border-slate-200 bg-white p-3 shadow-[0_6px_18px_rgba(15,23,42,0.03)]">
