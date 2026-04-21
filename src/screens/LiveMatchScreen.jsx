@@ -182,7 +182,12 @@ export default function LiveMatchScreen() {
 
   const pendingConfirmDetail = useMemo(() => {
     if (!pendingAction) return ''
-    if (pendingAction.origin === 'punto-directo') {
+    const origin = pendingAction.origin
+    if (origin === 'companero-punta') return t('live.direct.confirmCompaneroPunta')
+    if (origin === 'companero-falla') return t('live.direct.confirmCompaneroFalla')
+    if (origin === 'oponentes-punta') return t('live.direct.confirmOponentesPunta')
+    if (origin === 'oponentes-falla') return t('live.direct.confirmOponentesFalla')
+    if (origin === 'punto-directo') {
       return pendingAction.pointWinner === 'player' ? t('live.pointWon') : t('live.pointLost')
     }
     const resKey = `live.results.${pendingAction.result}`
@@ -213,7 +218,7 @@ export default function LiveMatchScreen() {
   const shotResultIdleClass = 'border-slate-200 bg-white text-slate-700'
 
   const directPointBaseClass =
-    'rounded-xl border-[0.5px] px-2 py-2 text-xs font-normal transition disabled:cursor-not-allowed disabled:opacity-45'
+    'w-full min-h-[48px] rounded-xl border-[0.5px] px-3 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-45'
   const directPointSelectedClass = 'border-[#185FA5] bg-[#E6F1FB] font-medium text-[#0C447C] ring-1 ring-[#185FA5]/40'
   const directPointIdleClass = 'border-slate-200 bg-white text-slate-700'
 
@@ -276,59 +281,117 @@ export default function LiveMatchScreen() {
         </div>
       </header>
 
-      <section className="mt-3 rounded-2xl border-[0.5px] border-slate-200 bg-white p-3">
-        <h2 className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
-          {t('live.noActionTitle')}
-        </h2>
-        <div className="mt-2 grid grid-cols-2 gap-1.5">
-          <button
-            type="button"
-            disabled={savingAction}
-            onClick={() =>
-              setPendingAction({
-                shot: 'Sin golpe',
-                result: 'winner',
-                origin: 'punto-directo',
-                pointWinner: 'player',
-              })
-            }
-            className={`${directPointBaseClass} ${
-              pendingMatches({
-                shot: 'Sin golpe',
-                result: 'winner',
-                origin: 'punto-directo',
-                pointWinner: 'player',
-              })
-                ? directPointSelectedClass
-                : directPointIdleClass
-            }`}
-          >
-            {t('live.pointWon')}
-          </button>
-          <button
-            type="button"
-            disabled={savingAction}
-            onClick={() =>
-              setPendingAction({
-                shot: 'Sin golpe',
-                result: 'errorNoForzado',
-                origin: 'punto-directo',
-                pointWinner: 'rival',
-              })
-            }
-            className={`${directPointBaseClass} ${
-              pendingMatches({
-                shot: 'Sin golpe',
-                result: 'errorNoForzado',
-                origin: 'punto-directo',
-                pointWinner: 'rival',
-              })
-                ? directPointSelectedClass
-                : directPointIdleClass
-            }`}
-          >
-            {t('live.pointLost')}
-          </button>
+      <section
+        className="mt-3 rounded-2xl border-[0.5px] border-slate-200 bg-white p-4"
+        aria-label={t('live.direct.sectionAria')}
+      >
+        <div className="grid grid-cols-2 gap-5">
+          <div className="flex min-w-0 flex-col">
+            <h2 className="text-center text-sm font-semibold text-slate-900">{t('live.direct.partnerTitle')}</h2>
+            <div className="mt-2.5 flex flex-col gap-2">
+              <button
+                type="button"
+                disabled={savingAction}
+                onClick={() =>
+                  setPendingAction({
+                    shot: 'Sin golpe',
+                    result: 'winner',
+                    origin: 'companero-punta',
+                    pointWinner: 'player',
+                  })
+                }
+                className={`${directPointBaseClass} ${
+                  pendingMatches({
+                    shot: 'Sin golpe',
+                    result: 'winner',
+                    origin: 'companero-punta',
+                    pointWinner: 'player',
+                  })
+                    ? directPointSelectedClass
+                    : directPointIdleClass
+                }`}
+              >
+                {t('live.direct.scores')}
+              </button>
+              <button
+                type="button"
+                disabled={savingAction}
+                onClick={() =>
+                  setPendingAction({
+                    shot: 'Sin golpe',
+                    result: 'errorNoForzado',
+                    origin: 'companero-falla',
+                    pointWinner: 'rival',
+                  })
+                }
+                className={`${directPointBaseClass} ${
+                  pendingMatches({
+                    shot: 'Sin golpe',
+                    result: 'errorNoForzado',
+                    origin: 'companero-falla',
+                    pointWinner: 'rival',
+                  })
+                    ? directPointSelectedClass
+                    : directPointIdleClass
+                }`}
+              >
+                {t('live.direct.miss')}
+              </button>
+            </div>
+          </div>
+          <div className="flex min-w-0 flex-col">
+            <h2 className="text-center text-sm font-semibold text-slate-900">{t('live.direct.oppTitle')}</h2>
+            <div className="mt-2.5 flex flex-col gap-2">
+              <button
+                type="button"
+                disabled={savingAction}
+                onClick={() =>
+                  setPendingAction({
+                    shot: 'Sin golpe',
+                    result: 'errorNoForzado',
+                    origin: 'oponentes-punta',
+                    pointWinner: 'rival',
+                  })
+                }
+                className={`${directPointBaseClass} ${
+                  pendingMatches({
+                    shot: 'Sin golpe',
+                    result: 'errorNoForzado',
+                    origin: 'oponentes-punta',
+                    pointWinner: 'rival',
+                  })
+                    ? directPointSelectedClass
+                    : directPointIdleClass
+                }`}
+              >
+                {t('live.direct.scores')}
+              </button>
+              <button
+                type="button"
+                disabled={savingAction}
+                onClick={() =>
+                  setPendingAction({
+                    shot: 'Sin golpe',
+                    result: 'winner',
+                    origin: 'oponentes-falla',
+                    pointWinner: 'player',
+                  })
+                }
+                className={`${directPointBaseClass} ${
+                  pendingMatches({
+                    shot: 'Sin golpe',
+                    result: 'winner',
+                    origin: 'oponentes-falla',
+                    pointWinner: 'player',
+                  })
+                    ? directPointSelectedClass
+                    : directPointIdleClass
+                }`}
+              >
+                {t('live.direct.miss')}
+              </button>
+            </div>
+          </div>
         </div>
       </section>
 
