@@ -241,17 +241,19 @@ export default function LiveMatchScreen() {
     <main
       className={`mx-auto min-h-screen w-full max-w-md bg-[#F4F7FB] px-4 py-5 ${pendingAction ? 'pb-36' : ''}`}
     >
-      <header className="mb-3 rounded-2xl border-[0.5px] border-slate-200 bg-white p-3">
+      <header className="mb-3 rounded-2xl border-[0.5px] border-slate-200 bg-white p-4">
         <p className="text-xs font-normal tracking-wide text-[#185FA5]">{t('live.title')}</p>
         <h1 className="mt-0.5 text-lg font-medium text-slate-900">{session.studentName}</h1>
-        <div className="mt-2 flex justify-center">
-          <p className="rounded-lg border-[0.5px] border-slate-200 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-700">
+        <div className="mt-3 flex justify-center">
+          <p className="rounded-xl border-[0.5px] border-slate-200 bg-slate-50 px-4 py-2.5 text-base font-semibold tabular-nums leading-snug text-slate-800">
             {t('live.set')} {matchState.currentSet} · {t('live.game')} {getCurrentGame(matchState, session.format)} ·{' '}
             {displayPointScore(matchState, session.deuceType, session.format)}
           </p>
         </div>
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <p className="text-2xl font-medium tabular-nums text-slate-900">{formatTime(elapsedSeconds)}</p>
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <p className="min-w-0 shrink text-3xl font-semibold tabular-nums tracking-tight text-slate-900">
+            {formatTime(elapsedSeconds)}
+          </p>
           <button
             type="button"
             onClick={() => {
@@ -259,7 +261,7 @@ export default function LiveMatchScreen() {
               setIsPaused(false)
             }}
             disabled={timerStarted}
-            className="rounded-xl border-[0.5px] border-[#185FA5] bg-[#E6F1FB] px-2.5 py-1.5 text-xs font-normal text-[#0C447C] disabled:cursor-not-allowed disabled:opacity-50"
+            className="shrink-0 rounded-xl border-[0.5px] border-[#185FA5] bg-[#E6F1FB] px-4 py-2.5 text-sm font-medium text-[#0C447C] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {t('live.start')}
           </button>
@@ -267,7 +269,7 @@ export default function LiveMatchScreen() {
             type="button"
             onClick={() => setIsPaused((current) => !current)}
             disabled={!timerStarted}
-            className="rounded-xl border-[0.5px] border-slate-200 bg-slate-100 px-2.5 py-1.5 text-xs font-normal text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="shrink-0 rounded-xl border-[0.5px] border-slate-200 bg-slate-100 px-4 py-2.5 text-sm font-medium text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isPaused ? t('live.resume') : t('live.pause')}
           </button>
