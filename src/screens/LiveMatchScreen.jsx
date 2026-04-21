@@ -14,6 +14,62 @@ import { finalizeSession, getSessionById } from '../services/sessions'
 
 const ACTION_RESULT_KEYS = ['winner', 'errorNoForzado', 'errorForzado']
 
+/** @typedef {{ engaged: boolean, baseMs: number, runningSinceMs: number | null }} LiveTimerModel */
+
+function defaultLiveTimer() {
+  return { engaged: false, baseMs: 0, runningSinceMs: null }
+}
+
+function liveTimerStorageKey(sessionId) {
+  return `padelcoach-live-timer-${sessionId}`
+}
+
+/** @returns {LiveTimerModel | null} */
+function loadLiveTimer(sessionId) {
+  if (!sessionId) return null
+  try {
+    const raw = localStorage.getItem(liveTimerStorageKey(sessionId))
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (typeof parsed !== 'object' || parsed == null) return null
+    const engaged = Boolean(parsed.engaged)
+    const baseMs = typeof parsed.baseMs === 'number' && parsed.baseMs >= 0 ? parsed.baseMs : 0
+    const runningSinceMs =
+      parsed.runningSinceMs != null && typeof parsed.runningSinceMs === 'number'
+        ? parsed.runningSinceMs
+        : null
+    return { engaged, baseMs, runningSinceMs }
+  } catch {
+    return null
+  }
+}
+
+function saveLiveTimer(sessionId, model) {
+  if (!sessionId) return
+  try {
+    localStorage.setItem(liveTimerStorageKey(sessionId), JSON.stringify(model))
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+function clearLiveTimer(sessionId) {
+  if (!sessionId) return
+  try {
+    localStorage.removeItem(liveTimerStorageKey(sessionId))
+  } catch {
+    /* ignore */
+  }
+}
+
+/** @param {LiveTimerModel} model */
+function elapsedSecondsFromModel(model) {
+  if (!model.engaged) return 0
+  const now = Date.now()
+  const runMs = model.runningSinceMs != null ? Math.max(0, now - model.runningSinceMs) : 0
+  return Math.floor((model.baseMs + runMs) / 1000)
+}
+
 function formatTime(totalSeconds) {
   const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0')
   const seconds = String(totalSeconds % 60).padStart(2, '0')
@@ -36,14 +92,22 @@ export default function LiveMatchScreen() {
   const [session, setSession] = useState(location.state?.session ?? null)
   const [loadingSession, setLoadingSession] = useState(!location.state?.session)
   const [error, setError] = useState('')
-  const [timerStarted, setTimerStarted] = useState(false)
-  const [isPaused, setIsPaused] = useState(false)
-  const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const [timerModel, setTimerModel] = useState(() => defaultLiveTimer())
+  const [tick, setTick] = useState(0)
   const [matchState, setMatchState] = useState(createInitialMatchState)
   const [lastAction, setLastAction] = useState(null)
   const [savingAction, setSavingAction] = useState(false)
   const [actionCount, setActionCount] = useState(0)
   const [pendingAction, setPendingAction] = useState(null)
+
+  const timerSessionIdRef = useRef(null)
+
+  const elapsedSeconds = useMemo(() => {
+    void tick
+    return elapsedSecondsFromModel(timerModel)
+  }, [timerModel, tick])
+  const timerStarted = timerModel.engaged
+  const isPaused = timerModel.engaged && timerModel.runningSinceMs === null
 
   const liveEndRef = useRef({ session: null, matchState: null, elapsedSeconds: 0 })
 
@@ -61,6 +125,7 @@ export default function LiveMatchScreen() {
         try {
           await finalizeSession(snap.session.id)
         } finally {
+          clearLiveTimer(snap.session.id)
           navigate(`/resumen/${snap.session.id}`, {
             replace: true,
             state: {
@@ -105,13 +170,37 @@ export default function LiveMatchScreen() {
   }, [session, sessionId])
 
   useEffect(() => {
-    if (!timerStarted || isPaused) return undefined
-    const timer = window.setInterval(() => {
-      setElapsedSeconds((current) => current + 1)
-    }, 1000)
+    if (!session?.id) return
+    if (timerSessionIdRef.current !== session.id) {
+      timerSessionIdRef.current = session.id
+      const saved = loadLiveTimer(session.id)
+      setTimerModel(saved ?? defaultLiveTimer())
+      return
+    }
+    saveLiveTimer(session.id, timerModel)
+  }, [session?.id, timerModel])
 
-    return () => window.clearInterval(timer)
-  }, [isPaused, timerStarted])
+  useEffect(() => {
+    if (!timerModel.engaged || timerModel.runningSinceMs == null) return undefined
+    const id = window.setInterval(() => {
+      setTick((n) => n + 1)
+    }, 1000)
+    return () => window.clearInterval(id)
+  }, [timerModel.engaged, timerModel.runningSinceMs])
+
+  useEffect(() => {
+    const bump = () => {
+      if (document.visibilityState === 'visible') setTick((n) => n + 1)
+    }
+    document.addEventListener('visibilitychange', bump)
+    window.addEventListener('focus', bump)
+    window.addEventListener('pageshow', bump)
+    return () => {
+      document.removeEventListener('visibilitychange', bump)
+      window.removeEventListener('focus', bump)
+      window.removeEventListener('pageshow', bump)
+    }
+  }, [])
 
   useEffect(() => {
     if (!session?.id) return undefined
@@ -198,6 +287,7 @@ export default function LiveMatchScreen() {
     try {
       await finalizeSession(session.id)
     } finally {
+      clearLiveTimer(session.id)
       navigate(`/resumen/${session.id}`, {
         replace: true,
         state: {
@@ -309,8 +399,12 @@ export default function LiveMatchScreen() {
           <button
             type="button"
             onClick={() => {
-              setTimerStarted(true)
-              setIsPaused(false)
+              const now = Date.now()
+              setTimerModel((m) => ({
+                engaged: true,
+                baseMs: m.engaged ? m.baseMs : 0,
+                runningSinceMs: now,
+              }))
             }}
             disabled={timerStarted || matchOver}
             className="shrink-0 rounded-xl border-[0.5px] border-[#185FA5] bg-[#E6F1FB] px-4 py-2.5 text-sm font-medium text-[#0C447C] disabled:cursor-not-allowed disabled:opacity-50"
@@ -319,7 +413,19 @@ export default function LiveMatchScreen() {
           </button>
           <button
             type="button"
-            onClick={() => setIsPaused((current) => !current)}
+            onClick={() => {
+              setTimerModel((m) => {
+                if (!m.engaged) return m
+                if (m.runningSinceMs != null) {
+                  return {
+                    ...m,
+                    baseMs: m.baseMs + (Date.now() - m.runningSinceMs),
+                    runningSinceMs: null,
+                  }
+                }
+                return { ...m, runningSinceMs: Date.now() }
+              })
+            }}
             disabled={!timerStarted || matchOver}
             className="shrink-0 rounded-xl border-[0.5px] border-slate-200 bg-slate-100 px-4 py-2.5 text-sm font-medium text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -536,7 +642,7 @@ export default function LiveMatchScreen() {
             </p>
             <button
               type="button"
-              onClick={() => setIsPaused(false)}
+              onClick={() => setTimerModel((m) => ({ ...m, runningSinceMs: Date.now() }))}
               className="mt-8 w-full min-h-[52px] rounded-xl bg-[#185FA5] px-4 py-3 text-base font-semibold text-white shadow-md transition active:scale-[0.99]"
             >
               {t('live.pauseContinue')}
