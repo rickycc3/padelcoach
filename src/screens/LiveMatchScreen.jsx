@@ -342,7 +342,7 @@ export default function LiveMatchScreen() {
                     shot,
                     result: resultKey,
                     origin: 'golpe',
-                    pointWinner: resultKey === 'errorNoForzado' ? 'rival' : 'player',
+                    pointWinner: resultKey === 'winner' ? 'player' : 'rival',
                   }
                   return (
                     <button
