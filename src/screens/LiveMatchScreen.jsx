@@ -99,6 +99,7 @@ export default function LiveMatchScreen() {
   const [savingAction, setSavingAction] = useState(false)
   const [actionCount, setActionCount] = useState(0)
   const [pendingAction, setPendingAction] = useState(null)
+  const [startMatchOverlayOpen, setStartMatchOverlayOpen] = useState(false)
 
   const timerSessionIdRef = useRef(null)
 
@@ -334,11 +335,29 @@ export default function LiveMatchScreen() {
 
   const matchOver = matchState.finished
   const clockPaused = timerStarted && isPaused
-  const blockInputs = savingAction || matchOver || clockPaused
+  const blockInputs = savingAction || matchOver || clockPaused || startMatchOverlayOpen
 
   async function handleConfirmPending() {
-    if (!pendingAction || savingAction || matchState.finished || clockPaused) return
+    if (!pendingAction || savingAction || matchState.finished || clockPaused || startMatchOverlayOpen) return
+    if (!timerModel.engaged) {
+      setStartMatchOverlayOpen(true)
+      return
+    }
     const ok = await registerAction(pendingAction)
+    if (ok) setPendingAction(null)
+  }
+
+  async function handleConfirmStartMatchAndRecord() {
+    if (!pendingAction || savingAction || matchState.finished || clockPaused) return
+    const payload = pendingAction
+    const now = Date.now()
+    setStartMatchOverlayOpen(false)
+    setTimerModel((m) => ({
+      engaged: true,
+      baseMs: m.engaged ? m.baseMs : 0,
+      runningSinceMs: now,
+    }))
+    const ok = await registerAction(payload)
     if (ok) setPendingAction(null)
   }
 
@@ -651,6 +670,32 @@ export default function LiveMatchScreen() {
         </div>
       )}
 
+      {startMatchOverlayOpen && !matchOver && (
+        <div
+          className="fixed inset-0 z-[55] flex items-center justify-center bg-slate-950/55 px-5 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="start-match-overlay-title"
+        >
+          <div className="w-full max-w-sm rounded-2xl border border-slate-200/80 bg-white p-8 shadow-2xl">
+            <p
+              id="start-match-overlay-title"
+              className="text-center text-2xl font-bold leading-snug text-slate-900 sm:text-3xl"
+            >
+              {t('live.startMatchPrompt')}
+            </p>
+            <button
+              type="button"
+              disabled={savingAction}
+              onClick={() => void handleConfirmStartMatchAndRecord()}
+              className="mt-8 w-full min-h-[52px] rounded-xl bg-[#185FA5] px-4 py-3 text-base font-semibold text-white shadow-md transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              {t('live.confirm')}
+            </button>
+          </div>
+        </div>
+      )}
+
       {pendingAction && (
         <div
           className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur-sm"
@@ -663,7 +708,10 @@ export default function LiveMatchScreen() {
               <button
                 type="button"
                 disabled={blockInputs}
-                onClick={() => setPendingAction(null)}
+                onClick={() => {
+                  setPendingAction(null)
+                  setStartMatchOverlayOpen(false)
+                }}
                 className="min-h-[48px] flex-1 rounded-xl border-[0.5px] border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-800 transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
               >
                 {t('live.cancel')}
