@@ -218,7 +218,7 @@ export default function LiveMatchScreen() {
   const shotResultIdleClass = 'border-slate-200 bg-white text-slate-700'
 
   const directPointBaseClass =
-    'w-full min-h-[48px] rounded-xl border-[0.5px] px-3 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-45'
+    'w-full min-h-[36px] rounded-lg border-[0.5px] px-2 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-45'
   const directPointSelectedClass = 'border-[#185FA5] bg-[#E6F1FB] font-medium text-[#0C447C] ring-1 ring-[#185FA5]/40'
   const directPointIdleClass = 'border-slate-200 bg-white text-slate-700'
 
@@ -282,13 +282,13 @@ export default function LiveMatchScreen() {
       </header>
 
       <section
-        className="mt-3 rounded-2xl border-[0.5px] border-slate-200 bg-white p-4"
+        className="mt-3 rounded-2xl border-[0.5px] border-slate-200 bg-white px-2.5 py-2"
         aria-label={t('live.direct.sectionAria')}
       >
-        <div className="grid grid-cols-2 gap-5">
+        <div className="grid grid-cols-2 gap-3">
           <div className="flex min-w-0 flex-col">
-            <h2 className="text-center text-sm font-semibold text-slate-900">{t('live.direct.partnerTitle')}</h2>
-            <div className="mt-2.5 flex flex-col gap-2">
+            <h2 className="text-center text-xs font-semibold text-slate-800">{t('live.direct.partnerTitle')}</h2>
+            <div className="mt-1.5 flex flex-col gap-1">
               <button
                 type="button"
                 disabled={savingAction}
@@ -340,8 +340,8 @@ export default function LiveMatchScreen() {
             </div>
           </div>
           <div className="flex min-w-0 flex-col">
-            <h2 className="text-center text-sm font-semibold text-slate-900">{t('live.direct.oppTitle')}</h2>
-            <div className="mt-2.5 flex flex-col gap-2">
+            <h2 className="text-center text-xs font-semibold text-slate-800">{t('live.direct.oppTitle')}</h2>
+            <div className="mt-1.5 flex flex-col gap-1">
               <button
                 type="button"
                 disabled={savingAction}
