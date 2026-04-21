@@ -140,7 +140,7 @@ export default function LiveMatchScreen() {
 
   /** @returns {Promise<boolean>} */
   async function registerAction({ shot, result, origin, pointWinner }) {
-    if (!session || matchState.finished) return false
+    if (!session || matchState.finished || (timerStarted && isPaused)) return false
     setSavingAction(true)
     setError('')
 
@@ -178,7 +178,7 @@ export default function LiveMatchScreen() {
   }
 
   async function handleUndoLastAction() {
-    if (!session || savingAction || actionCount === 0 || matchState.finished) return
+    if (!session || savingAction || actionCount === 0 || matchState.finished || (timerStarted && isPaused)) return
     setSavingAction(true)
     setError('')
     try {
@@ -242,14 +242,15 @@ export default function LiveMatchScreen() {
     )
   }
 
+  const matchOver = matchState.finished
+  const clockPaused = timerStarted && isPaused
+  const blockInputs = savingAction || matchOver || clockPaused
+
   async function handleConfirmPending() {
-    if (!pendingAction || savingAction || matchState.finished) return
+    if (!pendingAction || savingAction || matchState.finished || clockPaused) return
     const ok = await registerAction(pendingAction)
     if (ok) setPendingAction(null)
   }
-
-  const matchOver = matchState.finished
-  const blockInputs = savingAction || matchOver
 
   const shotResultBaseClass =
     'rounded-lg border-[0.5px] px-1 py-1.5 text-[10px] font-normal transition disabled:cursor-not-allowed disabled:opacity-45'
@@ -518,6 +519,31 @@ export default function LiveMatchScreen() {
       >
         {t('live.finish')}
       </button>
+
+      {clockPaused && !matchOver && (
+        <div
+          className="fixed inset-0 z-[50] flex items-center justify-center bg-slate-950/55 px-5 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pause-overlay-title"
+        >
+          <div className="w-full max-w-sm rounded-2xl border border-slate-200/80 bg-white p-8 shadow-2xl">
+            <p
+              id="pause-overlay-title"
+              className="text-center text-4xl font-black uppercase leading-none tracking-[0.18em] text-slate-900 sm:text-5xl"
+            >
+              {t('live.pauseOverlayTitle')}
+            </p>
+            <button
+              type="button"
+              onClick={() => setIsPaused(false)}
+              className="mt-8 w-full min-h-[52px] rounded-xl bg-[#185FA5] px-4 py-3 text-base font-semibold text-white shadow-md transition active:scale-[0.99]"
+            >
+              {t('live.pauseContinue')}
+            </button>
+          </div>
+        </div>
+      )}
 
       {pendingAction && (
         <div
